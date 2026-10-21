@@ -102,19 +102,21 @@
 | `"cwd"` の往復 | `TestContentRoundTrip` |
 | 端末をまたいだ往復と、送り直しで同じバイト列 | `TestProjectRoundTrip`, `TestContentRoundTrip` |
 
-### 5. `internal/picker/picker_test.go` — internal/picker (Line / Ago / ResumeDir)
+### 5. `internal/picker/picker_test.go` — internal/picker (Line / Ago / ResumeDir / selectedIDs)
 
 - `Line` は fzf の1行を「UUID・題・`@リポ #番号`・更新日」のタブ区切りで作り、`@リポ #番号` と更新日は薄い色で出す。題が無ければ最初の発言を1行にして題の代わりに使う
 - `Ago` は、端末のローカル時刻の日付で日数を数え、9日前までは `*` に続けて日数（今日は `*0`、昨日は `*1`）、それより前は週（`2w`）で返す
 - `ResumeDir` は、記録された cwd があればそこを、無ければ手元にある一番近い祖先を返す。祖先がホームそのもの、またはホームより上になるとき、および cwd が空のときは、ホームを返す
+- `selectedIDs` は、fzf で複数の行を選んだとき、選んだ順にすべての行の UUID を返す
 
 | 保証（要約） | 対応テスト |
 |---|---|
 | fzf の1行の形 | `TestLine` |
 | ローカルの日付での日数の数え方 | `TestAgo` |
 | resume で入るディレクトリ | `TestResumeDir` |
+| fzf で選んだ複数の行の ID を、選んだ順に取る | `TestSelectedIDs` |
 
-*（この節には `Line` と `ResumeDir` が混在するので、行ごとに主語を明示している）*
+*（この節には `Line`・`Ago`・`ResumeDir`・`selectedIDs` が混在するので、行ごとに主語を明示している）*
 
 ### 6. `internal/session/search_test.go` — internal/session (search)
 
@@ -132,7 +134,9 @@
 
 - 一覧に出すのは projects 直下のセッションだけで、`<uuid>/subagents/` などの付属物は出さない
 - 一覧の1行は、題（最後に付け直されたもの）・最初の発言（スラッシュコマンドは打った形）・最後の cwd・リポ・ブランチ・Issue 番号・発言の数・最初と最後の時刻を持つ。発言の数に、`isMeta`・`tool_result`・サブエージェントの発言は入れない
-- 一覧は新しい順に並び、発言の無いセッションは出さない
+- 一覧は新しい順に並び、発言の無いセッションと、`claude -p` で動かしたセッション（`entrypoint` が `sdk-cli`）は出さない
+- 同じ UUID が複数のプロジェクトにあるときは、更新の新しい方の1行だけを出す
+- リポ名は起動した場所の cwd から取る。ホームで起動したセッションは最後の cwd から取る
 - リポ名は cwd の末尾から取り、worktree（`.claude/worktrees/…`）と worktree の置き場そのものは元のリポの名前にする。Issue 番号は、`task/417-…` のようなブランチ名か worktree の名前から取る。数字の直後に `-` と英字が続くときだけ、その数字を番号にし、`day/2026-10-08` のような日付は番号にしない
 
 | 保証（要約） | 対応テスト |
@@ -141,17 +145,20 @@
 | 一覧の1行の中身 | `TestScan` |
 | 新しい順・発言の無いものを出さない | `TestScanAllOrderAndEmpty` |
 | リポ名と Issue 番号の取り方 | `TestRepoNameAndIssue` |
+| `claude -p` のセッションを出さない | `TestScanAllSkipsHeadless` |
+| 同じ UUID は1行にまとめる | `TestSameUUIDInTwoProjects` |
+| リポは起動した場所から | `TestRepoComesFromWhereTheSessionStarted` |
 
 ### 8. `internal/session/transcript_test.go` — internal/session (ReadTurns / Find)
 
 - セッションを、人の発言1つと次の発言の前までの応答（文章・ツールの呼び出し・ツールの出力）に分ける。ツールの出力には呼んだツールの名前を付け、ターンの最終応答はその中の最後の文章にする
-- セッション ID は UUID の先頭の数文字で引ける。当たらない指定、16進とハイフン以外を含む指定、複数に当たる指定はエラーにする
+- セッション ID は UUID の先頭の数文字で引ける。当たらない指定、16進とハイフン以外を含む指定、複数のセッションに当たる指定はエラーにする。同じ UUID が複数のプロジェクトにあるときは、更新の新しい方を返す
 - compact のあとに自動で入る要約は、人の発言として数えない
 
 | 保証（要約） | 対応テスト |
 |---|---|
 | ターンへの分け方 | `TestReadTurns` |
-| ID の引き方 | `TestFind` |
+| ID の引き方 | `TestFind`, `TestSameUUIDInTwoProjects` |
 | compact の要約を数えない | `TestPromptTextSkipsCompactSummary` |
 
 ### 9. `cmd/ccreel/cli_test.go` — cmd/ccreel (resume / show / outline / find / pick / push / preview)
@@ -160,6 +167,8 @@
 - `show` と `outline` は、`CCREEL_CONFIG_DIRS` の別の config dir にあるセッションも ID から引く
 - `find` は、複数の config dir のセッションを合わせて順位を付け、候補ごとに `config_dir` を返す
 - `pick <言葉>` は、`find` と同じ順位で fzf に行を渡す
+- `pick` は、`CCREEL_CONFIG_DIRS` のすべての config dir のセッションを fzf に渡す
+- `pick` で複数を選ぶと、tmux の中では2本目から `tmux new-window` で、そのセッションの config dir を `CLAUDE_CONFIG_DIR` にして開き、1本目はいまのプロセスで開く
 - `outline --json` の項目は `turn`・`time`・`prompt`・`reply`・`tools`、`search --json` の項目は `id`・`repo`・`title`・`updated`・`turn`・`kind`・`snippet` である
 - `push` は、送らなかった回に stdout にも stderr にも何も出さない
 - `preview` は、題・`@リポ`・`#番号`・ブランチを先頭にまとめ、その下に新しいターンから順に、発言と最終応答を Markdown で並べる
@@ -170,6 +179,8 @@
 | 別の config dir のセッションを show・outline | `TestShowFindsSessionInOtherConfigDir` |
 | 複数の config dir を合わせた順位 | `TestFindRanksAcrossConfigDirs` |
 | `pick <言葉>` の並びは `find` の順位 | `TestPickWithWordsUsesFindOrder` |
+| `pick` はすべての config dir を出す | `TestPickListsEveryConfigDir` |
+| 複数を選ぶと tmux のウィンドウで開く | `TestPickOpensExtraSelectionsInTmux` |
 | `outline` と `search` の JSON の項目 | `TestOutlineAndSearchJSONFields` |
 | 送らなかった回は何も出さない | `TestPushIsQuietWhenNothingIsSent` |
 | `preview` の形と並び | `TestPreviewIsNewestFirstMarkdown` |
@@ -182,6 +193,7 @@
 
 - picker の絞り込みで、`*0`・`*1` が今日・昨日の行にだけ当たり（`*1` が10〜19日前の行に当たらない）、`12` のように数字だけを打っても、更新日の列に広く当たらないこと。fzf を対話で動かす必要があり、自動のテストでは確かめられない。tmux の中で手で確かめた
 - picker で選んだあと、claude を起動する前に端末の画面を消し、fzf の表示と claude の表示が重ならないこと。実際の端末でしか確かめられない。WSL と macOS の tmux の中で手で確かめた
+- picker で Tab を押して選んだ複数のセッションが、実際の tmux で別々のウィンドウに開くこと。tmux と fzf を対話で動かす必要がある。macOS の tmux の中で、claude の代わりのスクリプトを使って確かめた
 - ハブが BSD の `stat` しか持たないときにも、`Pull` が更新日時つきの一覧を取れること。手元にも CI にも BSD の環境が無く、通るかを確かめられない。GNU の `stat` の環境でしか通していない
 
 ## About

@@ -75,3 +75,14 @@ func TestResumeDir(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectedIDs(t *testing.T) {
+	out := "aaaa\tfirst\t@demo\t*0\nbbbb\tsecond\t@demo\t*1\n"
+	got := selectedIDs(out)
+	if len(got) != 2 || got[0] != "aaaa" || got[1] != "bbbb" {
+		t.Errorf("selectedIDs = %q, want [aaaa bbbb]", got)
+	}
+	if got := selectedIDs("\n"); len(got) != 0 {
+		t.Errorf("selectedIDs of empty output = %q, want none", got)
+	}
+}

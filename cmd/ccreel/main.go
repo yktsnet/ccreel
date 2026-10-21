@@ -507,14 +507,18 @@ func runPick(args []string, _, errw io.Writer) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	configDir := fs.Lookup("config-dir").Value.String()
+	// CCREEL_CONFIG_DIRS の config dir もまとめて一覧に出す。どれで開くかは resume がセッションの置き場から決める
+	dirs := configDirs(configDir)
 	o, err := opts()
 	// ハブが未設定でも、手元の履歴だけで選べるようにする
 	if err == nil && !*noPull {
-		if _, err := hubsync.Pull(o); err != nil {
-			fmt.Fprintf(errw, "ccreel: pull failed, showing local sessions only: %v\n", err)
+		for _, d := range dirs {
+			if _, err := hubsync.Pull(withConfigDir(o, configDir, d)); err != nil {
+				fmt.Fprintf(errw, "ccreel: pull of %s failed, showing local sessions only: %v\n", d, err)
+			}
 		}
 	}
-	configDir := fs.Lookup("config-dir").Value.String()
 	keep, err := lf.build()
 	if err != nil {
 		return err
@@ -524,7 +528,7 @@ func runPick(args []string, _, errw io.Writer) error {
 	if len(words) > 0 {
 		// 言葉があれば find と同じ順位で並べる。fzf に出る最初の数行が、Claude が find で選ぶ候補と同じになる
 		res, err := finder.Find(finder.ParseQuery(words), finder.Options{
-			ConfigDirs: []string{configDir}, CurrentRepo: currentRepo(), Exclude: os.Getenv("CLAUDE_CODE_SESSION_ID"),
+			ConfigDirs: dirs, CurrentRepo: currentRepo(), Exclude: os.Getenv("CLAUDE_CODE_SESSION_ID"),
 		})
 		if err != nil {
 			return err
@@ -535,9 +539,13 @@ func runPick(args []string, _, errw io.Writer) error {
 			}
 		}
 	} else {
-		paths, err := session.Discover(configDir)
-		if err != nil {
-			return err
+		var paths []string
+		for _, d := range dirs {
+			p, err := session.Discover(d)
+			if err != nil {
+				return err
+			}
+			paths = append(paths, p...)
 		}
 		for _, m := range session.ScanAll(paths) {
 			if keep(m) {
@@ -549,13 +557,38 @@ func runPick(args []string, _, errw io.Writer) error {
 	if err != nil {
 		return err
 	}
-	id, err := picker.Pick(metas, picker.Options{
+	ids, err := picker.Pick(metas, picker.Options{
 		Self: self, ConfigDir: configDir, Extra: strings.Fields(os.Getenv("CCREEL_FZF_OPTS")),
 	})
 	if err != nil {
 		return err
 	}
-	return resume(configDir, id, extra, errw)
+	// 2本目からは tmux の別のウィンドウで開き、1本目はこのペインで開く。resume は exec で戻らないので先に開いておく
+	if len(ids) > 1 {
+		if os.Getenv("TMUX") == "" {
+			fmt.Fprintf(errw, "ccreel: opening several sessions needs tmux; resuming only the first\n")
+		} else {
+			for _, id := range ids[1:] {
+				if err := openWindow(configDir, id, extra); err != nil {
+					fmt.Fprintf(errw, "ccreel: %s: %v\n", id, err)
+				}
+			}
+		}
+	}
+	return resume(configDir, ids[0], extra, errw)
+}
+
+// withConfigDir は primary 向けに組んだ同期の設定を、別の config dir 向けに直す。
+// mirror は config dir の名前で分けているので、既定の置き場なら名前だけ差し替える。
+func withConfigDir(o hubsync.Options, primary, dir string) hubsync.Options {
+	if filepath.Clean(dir) == filepath.Clean(primary) {
+		return o
+	}
+	if filepath.Base(o.Mirror) == filepath.Base(filepath.Clean(primary)) {
+		o.Mirror = filepath.Join(filepath.Dir(o.Mirror), filepath.Base(filepath.Clean(dir)))
+	}
+	o.ConfigDir = dir
+	return o
 }
 
 func runResume(args []string, _, errw io.Writer) error {
@@ -583,11 +616,33 @@ func resume(configDir, id string, extra []string, errw io.Writer) error {
 	if dir != m.CWD {
 		fmt.Fprintf(errw, "ccreel: %s is not here; resuming in %s\n", m.CWD, dir)
 	}
-	claude := os.Getenv("CCREEL_CLAUDE")
-	if claude == "" {
-		claude = "claude"
+	return picker.Resume(claudeCommand(), m.ID, dir, extra, claudeEnv(configDir))
+}
+
+func openWindow(configDir, id string, extra []string) error {
+	path, configDir, err := findSession(configDir, id)
+	if err != nil {
+		return err
 	}
-	return picker.Resume(claude, m.ID, dir, extra, claudeEnv(configDir))
+	m, err := session.Scan(path)
+	if err != nil {
+		return err
+	}
+	home, _ := os.UserHomeDir()
+	var setEnv []string
+	for _, kv := range claudeEnv(configDir) {
+		if strings.HasPrefix(kv, "CLAUDE_CONFIG_DIR=") {
+			setEnv = append(setEnv, kv)
+		}
+	}
+	return picker.OpenWindow(claudeCommand(), m.ID, picker.ResumeDir(m.CWD, home), extra, setEnv)
+}
+
+func claudeCommand() string {
+	if c := os.Getenv("CCREEL_CLAUDE"); c != "" {
+		return c
+	}
+	return "claude"
 }
 
 // claude には選んだのと同じ config dir を見せる。既定の ~/.claude のときに CLAUDE_CONFIG_DIR を新たに

@@ -1,4 +1,4 @@
-// Package picker は fzf で一覧から1本を選ばせ、選んだセッションを resume する。
+// Package picker は fzf で一覧から選ばせ、選んだセッションを resume する。
 package picker
 
 import (
@@ -62,10 +62,10 @@ type Options struct {
 // ErrCancelled は fzf を Esc などで閉じたとき。
 var ErrCancelled = errors.New("cancelled")
 
-// Pick は fzf を開き、選ばれたセッションの UUID を返す。
-func Pick(metas []session.Meta, o Options) (string, error) {
+// Pick は fzf を開き、選ばれたセッションの UUID を選んだ順に返す。Tab で複数を選べる。
+func Pick(metas []session.Meta, o Options) ([]string, error) {
 	if len(metas) == 0 {
-		return "", fmt.Errorf("no sessions in %s", o.ConfigDir)
+		return nil, fmt.Errorf("no sessions in %s", o.ConfigDir)
 	}
 	var in bytes.Buffer
 	now := time.Now()
@@ -80,13 +80,13 @@ func Pick(metas []session.Meta, o Options) (string, error) {
 	}
 	args := []string{
 		// --no-sort で、絞り込んでも渡した順（新しい順か find の順位）を保つ。
-		"--delimiter", "\t", "--with-nth", "2..", "--no-sort", "--ansi", "--tabstop", "2",
+		"--delimiter", "\t", "--with-nth", "2..", "--no-sort", "--ansi", "--tabstop", "2", "--multi",
 		// 全画面で開く。--height の表示は閉じたあとも描いたものが残り、resume した claude の画面と重なる
 		"--layout", "reverse", "--no-height",
 		// 幅が足りない端末では、題を切らないようにプレビューを下へ回す。fzf の <N は端末ではなくプレビュー欄の幅で比べる
 		"--preview", preview, "--preview-window", "right,55%,wrap,<60(down,45%,wrap)",
 		"--bind", "ctrl-/:toggle-preview",
-		"--header", "enter: resume · ctrl-/: preview · narrow with @repo #issue *0 (today) *1 …",
+		"--header", "enter: resume · tab: select several (tmux windows) · ctrl-/: preview · narrow with @repo #issue *0 (today) *1 …",
 		"--query", o.Query,
 	}
 	args = append(args, o.Extra...)
@@ -97,16 +97,26 @@ func Pick(metas []session.Meta, o Options) (string, error) {
 	var ee *exec.ExitError
 	// fzf は何も選ばずに閉じると 130、一致が無いと 1 を返す
 	if errors.As(err, &ee) && (ee.ExitCode() == 130 || ee.ExitCode() == 1) {
-		return "", ErrCancelled
+		return nil, ErrCancelled
 	}
 	if err != nil {
-		return "", fmt.Errorf("fzf: %w", err)
+		return nil, fmt.Errorf("fzf: %w", err)
 	}
-	id, _, _ := strings.Cut(strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0]), "\t")
-	if id == "" {
-		return "", ErrCancelled
+	ids := selectedIDs(string(out))
+	if len(ids) == 0 {
+		return nil, ErrCancelled
 	}
-	return id, nil
+	return ids, nil
+}
+
+func selectedIDs(out string) []string {
+	var ids []string
+	for _, l := range strings.Split(out, "\n") {
+		if id, _, _ := strings.Cut(strings.TrimSpace(l), "\t"); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 // ResumeDir は resume するときに入るディレクトリを決める。記録された cwd が手元に無ければ
@@ -146,6 +156,25 @@ func Resume(claude, id, dir string, extra, env []string) error {
 	}
 	argv := append([]string{filepath.Base(claude), "--resume", id}, extra...)
 	return syscall.Exec(path, argv, env)
+}
+
+// OpenWindow は tmux の新しいウィンドウで claude --resume を起動する。いまのペインは動かさない。
+// 新しいウィンドウは tmux サーバーの環境で始まるので、claude に要る変数は setEnv で明示して渡す。
+func OpenWindow(claude, id, dir string, extra, setEnv []string) error {
+	path, err := exec.LookPath(claude)
+	if err != nil {
+		return err
+	}
+	args := []string{"new-window", "-d", "-c", dir}
+	for _, kv := range setEnv {
+		args = append(args, "-e", kv)
+	}
+	args = append(args, path, "--resume", id)
+	args = append(args, extra...)
+	if out, err := exec.Command("tmux", args...).CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux new-window: %v: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func shellQuote(s string) string {

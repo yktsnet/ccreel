@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -30,6 +31,8 @@ type Meta struct {
 	Prompts     int       `json:"prompts"`
 	Started     time.Time `json:"started"`
 	Updated     time.Time `json:"updated"`
+	// claude -p で動かしたセッション。人が会話したものではないので一覧に出さない
+	Headless bool `json:"-"`
 }
 
 // Discover は projects 直下のセッションだけを返す。<uuid>/subagents などの付属物は一覧に出さない。
@@ -41,6 +44,7 @@ func Discover(configDir string) ([]string, error) {
 var ErrNotFound = errors.New("no session matches")
 
 // Find は UUID の先頭の数文字からセッションを引く。候補が複数なら誤って開かないよう失敗させる。
+// 同じ UUID が複数のプロジェクトにあるのは、途中で別のリポへ移ったセッションで、更新の新しい方を返す。
 func Find(configDir, prefix string) (string, error) {
 	if prefix == "" || strings.Trim(prefix, "0123456789abcdef-") != "" {
 		return "", fmt.Errorf("invalid session id %q", prefix)
@@ -49,17 +53,37 @@ func Find(configDir, prefix string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	switch len(paths) {
-	case 0:
+	if len(paths) == 0 {
 		return "", fmt.Errorf("%w %q in %s", ErrNotFound, prefix, configDir)
-	case 1:
-		return paths[0], nil
 	}
-	ids := make([]string, len(paths))
-	for i, p := range paths {
-		ids[i] = strings.TrimSuffix(filepath.Base(p), ".jsonl")
+	var ids []string
+	for _, p := range paths {
+		if id := sessionID(p); !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
 	}
-	return "", fmt.Errorf("%q matches %d sessions: %s", prefix, len(paths), strings.Join(ids, ", "))
+	if len(ids) > 1 {
+		return "", fmt.Errorf("%q matches %d sessions: %s", prefix, len(ids), strings.Join(ids, ", "))
+	}
+	return newest(paths), nil
+}
+
+func sessionID(path string) string {
+	return strings.TrimSuffix(filepath.Base(path), ".jsonl")
+}
+
+func newest(paths []string) string {
+	var best string
+	var bt time.Time
+	for _, p := range paths {
+		if fi, err := os.Stat(p); err == nil && (best == "" || fi.ModTime().After(bt)) {
+			best, bt = p, fi.ModTime()
+		}
+	}
+	if best == "" {
+		return paths[0]
+	}
+	return best
 }
 
 type record struct {
@@ -68,6 +92,7 @@ type record struct {
 	IsSidechain bool            `json:"isSidechain"`
 	CWD         string          `json:"cwd"`
 	GitBranch   string          `json:"gitBranch"`
+	Entrypoint  string          `json:"entrypoint"`
 	Timestamp   time.Time       `json:"timestamp"`
 	AITitle     string          `json:"aiTitle"`
 	Message     json.RawMessage `json:"message"`
@@ -103,10 +128,11 @@ func Scan(path string) (Meta, error) {
 	defer f.Close()
 
 	m := Meta{
-		ID:      strings.TrimSuffix(filepath.Base(path), ".jsonl"),
+		ID:      sessionID(path),
 		Path:    path,
 		Project: filepath.Base(filepath.Dir(path)),
 	}
+	var firstCWD string
 	err = eachRecord(f, func(r record) {
 		if !r.Timestamp.IsZero() {
 			if m.Started.IsZero() || r.Timestamp.Before(m.Started) {
@@ -118,6 +144,12 @@ func Scan(path string) (Meta, error) {
 		}
 		if r.CWD != "" {
 			m.CWD = r.CWD
+			if firstCWD == "" {
+				firstCWD = r.CWD
+			}
+		}
+		if r.Entrypoint == "sdk-cli" {
+			m.Headless = true
 		}
 		if r.GitBranch != "" {
 			m.Branch = r.GitBranch
@@ -143,7 +175,7 @@ func Scan(path string) (Meta, error) {
 			m.Updated = fi.ModTime()
 		}
 	}
-	m.Repo = repoName(m.CWD)
+	m.Repo = repoName(repoCWD(firstCWD, m.CWD))
 	m.Issue = issueNumber(m.Branch, m.CWD)
 	return m, nil
 }
@@ -243,6 +275,16 @@ func repoName(cwd string) string {
 	return filepath.Base(cwd)
 }
 
+// リポは起動した場所で決める。途中で別のリポへ cd しても、会話の主題は起動したリポにある。
+// ホームで起動してからリポへ移ったときは、ホームでは何も分からないので最後の場所を使う。
+func repoCWD(first, last string) string {
+	home, _ := os.UserHomeDir()
+	if first == "" || (home != "" && filepath.Clean(first) == filepath.Clean(home)) {
+		return last
+	}
+	return first
+}
+
 // Issue 番号は、task/417-s3-journal-store のようなブランチ名か、worktree の名前の先頭の数字から取る。
 // 数字の直後が "-<英字>" のときだけ番号とみなし、day/2026-10-08 のような日付は拾わない。
 var issueRe = regexp.MustCompile(`(?:^|/)([0-9]+)-[A-Za-z]`)
@@ -259,7 +301,8 @@ func issueNumber(branch, cwd string) string {
 	return ""
 }
 
-// ScanAll は並列に読み、新しい順に返す。読めなかったファイルは飛ばす。
+// ScanAll は並列に読み、新しい順に返す。読めなかったファイルと、人の発言が無いセッションは飛ばす。
+// 同じ UUID が複数のプロジェクトにあれば、更新の新しい方だけを残す。
 func ScanAll(paths []string) []Meta {
 	out := make([]Meta, len(paths))
 	ok := make([]bool, len(paths))
@@ -272,7 +315,7 @@ func ScanAll(paths []string) []Meta {
 			defer wg.Done()
 			defer func() { <-sem }()
 			m, err := Scan(p)
-			if err == nil && m.Prompts > 0 {
+			if err == nil && m.Prompts > 0 && !m.Headless {
 				out[i], ok[i] = m, true
 			}
 		}()
@@ -284,6 +327,14 @@ func ScanAll(paths []string) []Meta {
 			metas = append(metas, m)
 		}
 	}
-	sort.Slice(metas, func(i, j int) bool { return metas[i].Updated.After(metas[j].Updated) })
-	return metas
+	sort.SliceStable(metas, func(i, j int) bool { return metas[i].Updated.After(metas[j].Updated) })
+	seen := map[string]bool{}
+	uniq := metas[:0]
+	for _, m := range metas {
+		if !seen[m.ID] {
+			seen[m.ID] = true
+			uniq = append(uniq, m)
+		}
+	}
+	return uniq
 }

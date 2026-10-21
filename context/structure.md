@@ -11,7 +11,7 @@ internal/finder/            言葉からセッションを探して順位を付�
 internal/hubsync/           push・pull とハブの古いセッションの削除
   hub.go                      ハブ（host:path か手元のディレクトリ）への rsync と、ハブの側で走らせる sh のスクリプト
   hubsync.go                  Push・Pull。運ぶのはセッション本体の jsonl だけ。手元とハブのあいだに、ハブと同じ形の写し（mirror）を持つ
-internal/picker/            fzf で選ばせる（Pick）・一覧の1行と更新日の表示（Line・Ago）・resume の前に移るディレクトリを決める（ResumeDir）・画面を消して claude を exec する（Resume）
+internal/picker/            fzf で選ばせる（Pick）・一覧の1行と更新日の表示（Line・Ago）・resume の前に移るディレクトリを決める（ResumeDir）・画面を消して claude を exec する（Resume）・tmux の新しいウィンドウで claude を開く（OpenWindow）
 skills/ccreel/SKILL.md      利用者が Claude Code に入れる skill。どの場面でどのサブコマンドを呼ぶかを書く（本文は英語）
 testdata/projects/          架空のセッションで作った fixture。付属物（subagents/）と発言の無いセッションを含む
 .github/workflows/ci.yml    go vet と go test
@@ -27,6 +27,7 @@ flake.nix                   Nix のパッケージ。fzf・rg・rsync・ssh を 
   ├─ Candidates(rg) → Search            → search
   ├─ ParseQuery → collect(rg) → score → decide → find
   └─ pull → Discover（言葉があれば finder の順位）→ ScanAll → fzf → Find → ResumeDir → claude --resume → pick
+                                                                  （2本目からは tmux new-window）
 
 push: <config dir>/projects → mirror（ContentToHub）→ rsync → <hub>/<config dir 名>/projects
 pull: <hub>/<config dir 名>/projects → rsync（直近30日）→ mirror → <config dir>/projects（ContentFromHub）
@@ -42,7 +43,12 @@ pull は、ハブの一覧を更新日時つきで取り、手元の mirror よ�
 
 picker の右のペインには `ccreel preview <id>` が出す Markdown を表示し、bat があれば色を付ける。fzf は全画面で開く。更新日は9日前まで `*0`（今日）・`*1`（昨日）の形で出す。`@リポ`・`#番号` と同じく、この形を入力して一覧を絞り込める。
 
-引数なしの `ccreel` は `pick` と同じ。pull は、ハブが設定されていて `--no-pull` を付けていないときだけ行う。pull に失敗しても、手元のセッションで一覧を出す。
+引数なしの `ccreel` は `pick` と同じ。pick は `CCREEL_CONFIG_DIRS` の config dir をまとめて一覧に出し、config dir ごとに pull する。
+pull は、ハブが設定されていて `--no-pull` を付けていないときだけ行う。pull に失敗しても、手元のセッションで一覧を出す。
+fzf では Tab で複数を選べる。1本目はいまのペインで、2本目からは tmux の新しいウィンドウで resume する。tmux の外では1本目だけを開く。
+
+一覧には、`claude -p` で動かしたセッション（jsonl の `entrypoint` が `sdk-cli`）を出さない。
+リポは起動した場所の cwd から決める。ホームで起動したセッションだけは、最後の cwd から決める。resume で移る先は最後の cwd である。
 
 config dir は `--config-dir`、無ければ `CLAUDE_CONFIG_DIR`、それも無ければ `~/.claude` を使う。
 `find` と、ID からセッションを引く `show`・`outline`・`resume` は、`CCREEL_CONFIG_DIRS`（コロン区切り）の config dir も探す。
