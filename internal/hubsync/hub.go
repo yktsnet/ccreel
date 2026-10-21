@@ -89,19 +89,32 @@ func (h Hub) destArgs(configName string) ([]string, error) {
 	return []string{"--rsync-path", "mkdir -p " + h.dir(configName) + " && rsync"}, nil
 }
 
-// listRecent は、更新から days 日以内のセッションを projects からの相対パスで返す。
-// rsync の --files-from にそのまま渡せる。
-func (h Hub) listRecent(configName string, days int) ([]string, error) {
+// remoteFile はハブにあるセッション1本。Path は projects からの相対パス。
+type remoteFile struct {
+	Path  string
+	MTime int64 // Unix 秒
+}
+
+// listRecent は、更新から days 日以内のセッションを、更新日時を添えて返す。
+// pull は手元の写しと比べて新しいものだけを rsync するので、普段は ssh 1回で終わる。
+// stat の書式は GNU と BSD で違うので、GNU の形で失敗したら BSD の形で取り直す。
+func (h Hub) listRecent(configName string, days int) ([]remoteFile, error) {
+	find := fmt.Sprintf(`find . -mindepth 2 -maxdepth 2 -type f -name '*.jsonl' -mtime -%d`, days)
 	script := fmt.Sprintf(`cd %s 2>/dev/null || exit 0
-find . -mindepth 2 -maxdepth 2 -type f -name '*.jsonl' -mtime -%d`, h.dir(configName), days)
+%s -exec stat -c '%%Y %%n' {} + 2>/dev/null || %s -exec stat -f '%%m %%N' {} +`, h.dir(configName), find, find)
 	out, err := h.sh(script, nil)
 	if err != nil {
 		return nil, err
 	}
-	var list []string
-	for _, f := range strings.Fields(string(out)) {
-		f = strings.TrimPrefix(f, "./")
-		if isSessionFile(f) {
+	var list []remoteFile
+	for _, line := range strings.Split(string(out), "\n") {
+		var f remoteFile
+		var p string
+		if _, err := fmt.Sscanf(line, "%d %s", &f.MTime, &p); err != nil {
+			continue
+		}
+		f.Path = strings.TrimPrefix(p, "./")
+		if isSessionFile(f.Path) {
 			list = append(list, f)
 		}
 	}
