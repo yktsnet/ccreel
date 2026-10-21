@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ type Meta struct {
 	CWD         string    `json:"cwd"`
 	Repo        string    `json:"repo"`
 	Branch      string    `json:"branch,omitempty"`
+	Issue       string    `json:"issue,omitempty"`
 	Title       string    `json:"title"`
 	FirstPrompt string    `json:"first_prompt"`
 	Prompts     int       `json:"prompts"`
@@ -138,6 +140,7 @@ func Scan(path string) (Meta, error) {
 		}
 	}
 	m.Repo = repoName(m.CWD)
+	m.Issue = issueNumber(m.Branch, m.CWD)
 	return m, nil
 }
 
@@ -223,14 +226,33 @@ func between(s, open, close string) string {
 }
 
 // worktree の中で起動したセッションも、元のリポの名前で一覧に出す。
+// cwd が worktree の置き場そのもの（.../.claude/worktrees）のこともある。相手の端末にしか無い worktree を
+// 手元にある祖先へ書き換えた記録がこの形になる。
 func repoName(cwd string) string {
 	if cwd == "" {
 		return ""
 	}
-	if i := strings.Index(cwd, "/.claude/worktrees/"); i >= 0 {
+	const wt = "/.claude/worktrees"
+	if i := strings.Index(cwd+"/", wt+"/"); i >= 0 {
 		cwd = cwd[:i]
 	}
 	return filepath.Base(cwd)
+}
+
+// Issue 番号は、task/417-s3-journal-store のようなブランチ名か、worktree の名前の先頭の数字から取る。
+// 数字の直後が "-<英字>" のときだけ番号とみなし、day/2026-10-08 のような日付は拾わない。
+var issueRe = regexp.MustCompile(`(?:^|/)([0-9]+)-[A-Za-z]`)
+
+func issueNumber(branch, cwd string) string {
+	if m := issueRe.FindStringSubmatch(branch); m != nil {
+		return m[1]
+	}
+	if _, wt, ok := strings.Cut(cwd, "/.claude/worktrees/"); ok {
+		if m := issueRe.FindStringSubmatch(wt); m != nil {
+			return m[1]
+		}
+	}
+	return ""
 }
 
 // ScanAll は並列に読み、新しい順に返す。読めなかったファイルは飛ばす。

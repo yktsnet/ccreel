@@ -30,7 +30,8 @@ func TestScan(t *testing.T) {
 		{"FirstPrompt", m.FirstPrompt, "/review src/parser.go"},
 		{"CWD", m.CWD, "/home/alice/src/demo/.claude/worktrees/fix-parser"},
 		{"Repo", m.Repo, "demo"},
-		{"Branch", m.Branch, "fix-parser"},
+		{"Branch", m.Branch, "task/12-fix-parser"},
+		{"Issue", m.Issue, "12"},
 	}
 	for _, c := range checks {
 		if c.got != c.want {
@@ -59,5 +60,25 @@ func TestScanAllOrderAndEmpty(t *testing.T) {
 	// 発言の無い 33333333 は落ち、新しい順に並ぶ
 	if len(ids) != 2 || ids[0] != "22222222" || ids[1] != "11111111" {
 		t.Errorf("got %v, want [22222222 11111111]", ids)
+	}
+}
+
+func TestRepoNameAndIssue(t *testing.T) {
+	cases := []struct{ branch, cwd, repo, issue string }{
+		{"task/417-s3-journal-store", "/home/a/src/invoice/.claude/worktrees/417-s3-journal-store", "invoice", "417"},
+		// 祖先へ書き換えられた記録は worktree の置き場そのものを指す
+		{"task/749-month-picker", "/home/a/src/invoice/.claude/worktrees", "invoice", "749"},
+		{"feat/picker", "/home/a/src/ccreel/.claude/worktrees/882-manual-run", "ccreel", "882"},
+		{"day/2026-10-08-accdb-extract", "/home/a/src/invoice", "invoice", ""},
+		{"main", "/home/a/src/demo", "demo", ""},
+		{"", "", "", ""},
+	}
+	for _, c := range cases {
+		if got := repoName(c.cwd); got != c.repo {
+			t.Errorf("repoName(%q) = %q, want %q", c.cwd, got, c.repo)
+		}
+		if got := issueNumber(c.branch, c.cwd); got != c.issue {
+			t.Errorf("issueNumber(%q, %q) = %q, want %q", c.branch, c.cwd, got, c.issue)
+		}
 	}
 }
