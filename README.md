@@ -39,22 +39,16 @@ flowchart TD
   find{{"ccreel find<br/>点を付けて並べる"}}
   human ==> find
   claude --> find
-  find ==> fzf["fzf に同じ順で並ぶ"] ==> resume(["Enter で resume"])
+  find ==> resume(["fzf で選んで resume"])
   find --> dec{"決め切れたか"}
   subgraph S["skill（Claude Code）"]
-    read["outline → show で読む"]
-    ask["候補を見せて聞く"]
-    retry["語を変えて探し直す"]
-    answer(["続きから答える"])
-    none(["見つからないと伝える"])
+    read(["読んで続きから答える"])
+    ask(["候補を見せて聞く"])
+    retry(["語を変えて1回探し直す"])
   end
   dec -->|"1本に決まる"| read
   dec -->|"決め切れない"| ask
   dec -->|"候補なし"| retry
-  ask -->|"選ばれた1本"| read
-  read --> answer
-  retry -->|"1回だけ"| claude
-  retry -->|"2回目も無い"| none
 ```
 
 ### 端末をまたぐ: ハブは ssh と rsync があれば何でもよい
