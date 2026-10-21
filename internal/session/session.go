@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -31,6 +32,28 @@ type Meta struct {
 // Discover は projects 直下のセッションだけを返す。<uuid>/subagents などの付属物は一覧に出さない。
 func Discover(configDir string) ([]string, error) {
 	return filepath.Glob(filepath.Join(configDir, "projects", "*", "*.jsonl"))
+}
+
+// Find は UUID の先頭の数文字からセッションを引く。候補が複数なら誤って開かないよう失敗させる。
+func Find(configDir, prefix string) (string, error) {
+	if prefix == "" || strings.Trim(prefix, "0123456789abcdef-") != "" {
+		return "", fmt.Errorf("invalid session id %q", prefix)
+	}
+	paths, err := filepath.Glob(filepath.Join(configDir, "projects", "*", prefix+"*.jsonl"))
+	if err != nil {
+		return "", err
+	}
+	switch len(paths) {
+	case 0:
+		return "", fmt.Errorf("no session matches %q in %s", prefix, configDir)
+	case 1:
+		return paths[0], nil
+	}
+	ids := make([]string, len(paths))
+	for i, p := range paths {
+		ids[i] = strings.TrimSuffix(filepath.Base(p), ".jsonl")
+	}
+	return "", fmt.Errorf("%q matches %d sessions: %s", prefix, len(paths), strings.Join(ids, ", "))
 }
 
 type record struct {
@@ -163,6 +186,10 @@ func promptText(r record) (string, bool) {
 		}
 	}
 	text = commandText(strings.TrimSpace(text))
+	// compact のあとに自動で入る要約は、人の発言ではない
+	if strings.HasPrefix(text, "This session is being continued from a previous conversation") {
+		return "", false
+	}
 	return text, text != ""
 }
 

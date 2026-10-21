@@ -1,0 +1,89 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/yktsnet/ccreel/internal/session"
+)
+
+func TestSelectTurns(t *testing.T) {
+	var turns []session.Turn
+	for i := 1; i <= 6; i++ {
+		turns = append(turns, session.Turn{Index: i})
+	}
+	idx := func(ts []session.Turn) []int {
+		var out []int
+		for _, t := range ts {
+			out = append(out, t.Index)
+		}
+		return out
+	}
+	cases := []struct {
+		spec string
+		last int
+		want string
+	}{
+		{"", 0, "[1 2 3 4 5 6]"},
+		{"", 2, "[5 6]"},
+		{"3", 0, "[3]"},
+		{"2-4", 0, "[2 3 4]"},
+		{"2-5", 2, "[4 5]"},
+	}
+	for _, c := range cases {
+		got, err := selectTurns(turns, c.spec, c.last)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s := fmt.Sprint(idx(got)); s != c.want {
+			t.Errorf("selectTurns(%q, %d) = %s, want %s", c.spec, c.last, s, c.want)
+		}
+	}
+	for _, bad := range []string{"x", "5-2", "1-"} {
+		if _, err := selectTurns(turns, bad, 0); err == nil {
+			t.Errorf("selectTurns(%q) succeeded", bad)
+		}
+	}
+}
+
+func TestTruncate(t *testing.T) {
+	if got := truncate("あいうえお", 3); got != "あいう… [truncated 2 chars]" {
+		t.Errorf("truncate = %q", got)
+	}
+	if got := truncate("short", 0); got != "short" {
+		t.Errorf("truncate with 0 = %q", got)
+	}
+}
+
+func TestShowFlagsAfterID(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	var out, errw bytes.Buffer
+	if err := runShow([]string{"1111", "--final", "--json", "--last", "1"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	var turn session.Turn
+	if err := json.Unmarshal(out.Bytes(), &turn); err != nil {
+		t.Fatalf("output is not one JSON object: %q", out.String())
+	}
+	if turn.Index != 2 || len(turn.Messages) != 1 || turn.Messages[0].Text != "Fixed. Added TestParseEmpty." {
+		t.Errorf("got %+v", turn)
+	}
+}
+
+func TestShowMaxTotal(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	var out, errw bytes.Buffer
+	if err := runShow([]string{"1111", "--max-total", "10"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	// 1ターン目は上限を超えても出し、残りは止めたことを stderr で知らせる
+	if !strings.Contains(out.String(), "## turn 1") || strings.Contains(out.String(), "## turn 2") {
+		t.Errorf("stdout = %q", out.String())
+	}
+	if !strings.Contains(errw.String(), "1 more turn(s) from turn 2") {
+		t.Errorf("stderr = %q", errw.String())
+	}
+}
