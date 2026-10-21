@@ -110,3 +110,35 @@ func TestClaudeEnvReplacesConfigDir(t *testing.T) {
 		t.Errorf("CLAUDE_CONFIG_DIR appears %d times", n)
 	}
 }
+
+func TestListSkipsCurrentSession(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "22222222-2222-4222-8222-222222222222")
+	var out bytes.Buffer
+	if err := runList(nil, &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "22222222") || !strings.Contains(out.String(), "11111111") {
+		t.Errorf("default list = %q", out.String())
+	}
+	out.Reset()
+	if err := runList([]string{"--include-current"}, &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "22222222") {
+		t.Errorf("--include-current list = %q", out.String())
+	}
+}
+
+func TestListRepoIsExact(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	for repo, want := range map[string]bool{"demo": true, "dem": false} {
+		var out bytes.Buffer
+		if err := runList([]string{"--repo", repo}, &out, &out); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(out.String(), "11111111"); got != want {
+			t.Errorf("--repo %s: got %q", repo, out.String())
+		}
+	}
+}

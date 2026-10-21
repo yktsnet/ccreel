@@ -109,13 +109,15 @@ func parseWithArg(fs *flag.FlagSet, args []string, what string) (string, error) 
 }
 
 type listFilter struct {
-	since string
-	repo  string
+	since          string
+	repo           string
+	includeCurrent bool
 }
 
 func (lf *listFilter) register(fs *flag.FlagSet) {
 	fs.StringVar(&lf.since, "since", "", "only sessions updated within this period (e.g. 12h, 7d)")
-	fs.StringVar(&lf.repo, "repo", "", "only sessions whose repo name contains this")
+	fs.StringVar(&lf.repo, "repo", "", "only sessions in this repo (exact name; worktrees count as their repo)")
+	fs.BoolVar(&lf.includeCurrent, "include-current", false, "keep the session running this command (CLAUDE_CODE_SESSION_ID)")
 }
 
 func (lf *listFilter) build() (func(session.Meta) bool, error) {
@@ -127,11 +129,20 @@ func (lf *listFilter) build() (func(session.Meta) bool, error) {
 		}
 		cutoff = time.Now().Add(-d)
 	}
+	// Claude Code の中から呼ばれると、いま話しているセッションが一番新しい行になる。
+	// 「直前のセッション」を引くときに自分自身を返さないよう、既定で外す
+	current := ""
+	if !lf.includeCurrent {
+		current = os.Getenv("CLAUDE_CODE_SESSION_ID")
+	}
 	return func(m session.Meta) bool {
+		if current != "" && m.ID == current {
+			return false
+		}
 		if !cutoff.IsZero() && m.Updated.Before(cutoff) {
 			return false
 		}
-		return lf.repo == "" || strings.Contains(m.Repo, lf.repo)
+		return lf.repo == "" || m.Repo == lf.repo
 	}, nil
 }
 
