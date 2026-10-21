@@ -54,11 +54,6 @@ func read(t *testing.T, p string) string {
 	return string(b)
 }
 
-func exists(p string) bool {
-	_, err := os.Stat(p)
-	return err == nil
-}
-
 func setup(t *testing.T) (linux, mac machine, hubRoot string) {
 	t.Helper()
 	if _, err := exec.LookPath("rsync"); err != nil {
@@ -156,21 +151,40 @@ func TestNewerSideWins(t *testing.T) {
 func TestPullWindowAndPrune(t *testing.T) {
 	linux, mac, hubRoot := setup(t)
 	now := time.Now().Truncate(time.Second)
+	hubDir := filepath.Join(hubRoot, ".claude", "projects", "~-src-demo")
 
 	mac.write(t, "-Users-alice-src-demo/"+idA+".jsonl", `{}`+"\n", now.Add(-35*24*time.Hour))
+	// 40日を過ぎた手元のものは送らない（送ってもハブで消え、毎日送り直すことになる）
 	mac.write(t, "-Users-alice-src-demo/"+idOld+".jsonl", `{}`+"\n", now.Add(-45*24*time.Hour))
-	if _, err := Push(mac.opt); err != nil {
+	// ハブにある40日を過ぎたものは消える
+	stale := filepath.Join(hubRoot, ".claude", "projects", "~-src-other", idOld+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	hubDir := filepath.Join(hubRoot, ".claude", "projects", "~-src-demo")
+	if err := os.WriteFile(stale, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := now.Add(-45 * 24 * time.Hour)
+	os.Chtimes(stale, old, old)
+
+	st, err := Push(mac.opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Pruned {
+		t.Error("first push did not prune")
+	}
+	if st.Staged != 1 {
+		t.Errorf("staged %d files, want 1 (the 45-day-old one is skipped)", st.Staged)
+	}
 	if !exists(filepath.Join(hubDir, idA+".jsonl")) {
-		t.Error("35-day-old session was pruned from the hub")
+		t.Error("35-day-old session is missing from the hub")
 	}
 	if exists(filepath.Join(hubDir, idOld+".jsonl")) {
-		t.Error("45-day-old session is still on the hub")
+		t.Error("45-day-old local session was pushed")
 	}
-	if exists(filepath.Join(mac.opt.Mirror, "projects", "~-src-demo", idOld+".jsonl")) {
-		t.Error("45-day-old session is still in the mirror")
+	if exists(stale) || exists(filepath.Dir(stale)) {
+		t.Error("45-day-old session on the hub was not pruned")
 	}
 
 	// 30日より古いものは pull しない
@@ -179,6 +193,60 @@ func TestPullWindowAndPrune(t *testing.T) {
 	}
 	if exists(filepath.Join(linux.opt.ConfigDir, "projects", "-home-alice-src-demo", idA+".jsonl")) {
 		t.Error("35-day-old session was pulled")
+	}
+}
+
+func TestPushOnlyWhenChanged(t *testing.T) {
+	_, mac, _ := setup(t)
+	now := time.Now().Add(-time.Hour).Truncate(time.Second)
+	p := mac.write(t, "-Users-alice-src-demo/"+idA+".jsonl", `{"n":1}`+"\n", now)
+
+	st, err := Push(mac.opt)
+	if err != nil || !st.Sent || !st.Pruned {
+		t.Fatalf("first push: %+v, %v", st, err)
+	}
+
+	// 変わったものが無ければハブにつながない。つなげば届かない宛先で失敗する
+	good := mac.opt.Hub
+	mac.opt.Hub = Hub{Host: "ccreel-test.invalid", Root: "hub"}
+	if st, err := Push(mac.opt); err != nil || st.Sent {
+		t.Fatalf("unchanged push: %+v, %v", st, err)
+	}
+
+	// 送れなかった変更は、次の回に変わったものが無くても送り直す
+	os.WriteFile(p, []byte(`{"n":1}`+"\n"+`{"n":2}`+"\n"), 0o644)
+	os.Chtimes(p, now.Add(time.Minute), now.Add(time.Minute))
+	if _, err := Push(mac.opt); err == nil {
+		t.Fatal("push to an unreachable hub succeeded")
+	}
+	mac.opt.Hub = good
+	st, err = Push(mac.opt)
+	if err != nil || st.Staged != 0 || !st.Sent {
+		t.Fatalf("retry push: %+v, %v", st, err)
+	}
+	// 古いものを消すのは1日に1回
+	if st.Pruned {
+		t.Error("pruned twice within a day")
+	}
+
+	mac.opt.Force = true
+	if st, err := Push(mac.opt); err != nil || !st.Sent {
+		t.Errorf("forced push: %+v, %v", st, err)
+	}
+}
+
+func TestLockedMirror(t *testing.T) {
+	linux, _, _ := setup(t)
+	unlock, err := lock(linux.opt.Mirror)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	if _, err := Push(linux.opt); err != ErrBusy {
+		t.Errorf("Push = %v, want ErrBusy", err)
+	}
+	if _, err := Pull(linux.opt); err != ErrBusy {
+		t.Errorf("Pull = %v, want ErrBusy", err)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -79,9 +80,13 @@ func (h Hub) dir(configName string) string {
 	return quote(strings.TrimRight(h.Root, "/") + "/" + projectsRel(configName))
 }
 
-func (h Hub) mkdir(configName string) error {
-	_, err := h.sh("mkdir -p "+h.dir(configName), nil)
-	return err
+// destArgs は push の rsync が宛先のディレクトリを作るための引数。ssh の先では、受け手の rsync を
+// 起動する前に mkdir を走らせる。mkdir のために ssh を1回余分につながないため。
+func (h Hub) destArgs(configName string) ([]string, error) {
+	if h.Host == "" {
+		return nil, os.MkdirAll(strings.TrimRight(h.Root, "/")+"/"+projectsRel(configName), 0o755)
+	}
+	return []string{"--rsync-path", "mkdir -p " + h.dir(configName) + " && rsync"}, nil
 }
 
 // listRecent は、更新から days 日以内のセッションを projects からの相対パスで返す。

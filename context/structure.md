@@ -32,6 +32,10 @@ pull: <hub>/<config dir 名>/projects → rsync（直近30日）→ mirror → <
 mirror は既定で `$XDG_CACHE_HOME/ccreel/<config dir 名>` に置く。mirror に書いたファイルには元の更新日時を付け直す。
 pull で運んだものを push しても、rsync が差分なしと判定するためである。
 
+push はタイマーから毎分呼ばれる前提で作っている。変わったセッションが無く、前回の送信も済んでいれば、ハブにはつながずに終える。
+送れなかった変更は mirror の `.push-pending` に記録しておき、次の push で送り直す。ハブと mirror から更新後40日を過ぎたセッションを消すのは1日に1回で、
+最後に消した時刻を `.last-prune` に残す。push と pull は mirror の `.lock` で排他し、重なったときは待たずに止める。
+
 引数なしの `ccreel` は `pick` と同じ。pull は、ハブが設定されていて `--no-pull` を付けていないときだけ行う。pull に失敗しても、手元のセッションで一覧を出す。
 
 config dir は `--config-dir`、無ければ `CLAUDE_CONFIG_DIR`、それも無ければ `~/.claude` を使う。
