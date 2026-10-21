@@ -143,7 +143,7 @@ func TestPickWithWordsUsesFindOrder(t *testing.T) {
 	t.Setenv("CCREEL_HUB", "")
 
 	var errw bytes.Buffer
-	if err := runPick([]string{"logs", "parser", "--no-pull"}, &errw, &errw); err != nil && !strings.Contains(err.Error(), "cancelled") {
+	if err := runPick([]string{"logs", "parser", "--no-pull", "--all"}, &errw, &errw); err != nil && !strings.Contains(err.Error(), "cancelled") {
 		t.Fatalf("pick: %v %s", err, errw.String())
 	}
 	b, err := os.ReadFile(got)
@@ -256,7 +256,7 @@ func TestPickListsEveryConfigDir(t *testing.T) {
 	t.Setenv("CCREEL_HUB", "")
 
 	var errw bytes.Buffer
-	if err := runPick([]string{"--no-pull"}, &errw, &errw); err != nil && !strings.Contains(err.Error(), "cancelled") {
+	if err := runPick([]string{"--no-pull", "--all"}, &errw, &errw); err != nil && !strings.Contains(err.Error(), "cancelled") {
 		t.Fatalf("pick: %v %s", err, errw.String())
 	}
 	b, err := os.ReadFile(got)
@@ -290,7 +290,7 @@ func TestPickOpensExtraSelectionsInTmux(t *testing.T) {
 		"TMUX=/tmp/fake,1,0",
 		"CCREEL_HUB=",
 		"CCREEL_TEST_MAIN=1",
-		"CCREEL_TEST_ARGS=pick --no-pull",
+		"CCREEL_TEST_ARGS=pick --no-pull --all",
 		"CCREEL_CLAUDE="+filepath.Join(bin, "fake-claude"),
 		"CLAUDE_CONFIG_DIR="+fixture,
 		"CCREEL_CONFIG_DIRS="+fixture+":"+work,

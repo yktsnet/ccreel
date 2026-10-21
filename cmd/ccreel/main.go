@@ -37,7 +37,8 @@ Commands:
 <id> may be any unique prefix of the session UUID.
 The hub is an rsync destination such as host:path, given by --hub or CCREEL_HUB.
 Arguments after -- in pick and resume are passed to claude.
-CCREEL_CONFIG_DIRS (colon-separated) adds config dirs that find, show, outline and resume also look in.
+CCREEL_CONFIG_DIRS (colon-separated) adds config dirs that pick, find, show, outline and resume also look in.
+list and pick hide sessions with a single prompt; --all shows them.
 Run 'ccreel <command> -h' for flags.
 `
 
@@ -122,6 +123,8 @@ type listFilter struct {
 	repo           string
 	issue          string
 	includeCurrent bool
+	all            bool // list と pick だけが立てる。立てないと発言が1回のセッションを外す
+	oneShotFlag    bool // --all を受け付けるか
 }
 
 func (lf *listFilter) register(fs *flag.FlagSet) {
@@ -129,6 +132,13 @@ func (lf *listFilter) register(fs *flag.FlagSet) {
 	fs.StringVar(&lf.repo, "repo", "", "only sessions in this repo (exact name; worktrees count as their repo)")
 	fs.StringVar(&lf.issue, "issue", "", "only sessions for this issue number (taken from the branch or worktree name)")
 	fs.BoolVar(&lf.includeCurrent, "include-current", false, "keep the session running this command (CLAUDE_CODE_SESSION_ID)")
+}
+
+// registerAll は list と pick に --all を足す。発言が1回で終わったセッションは、試しに打っただけのものが多く、
+// 一覧で探すときには邪魔になる。言葉で探す find と search は中身で当てるので、外さない
+func (lf *listFilter) registerAll(fs *flag.FlagSet) {
+	lf.oneShotFlag = true
+	fs.BoolVar(&lf.all, "all", false, "also show sessions with a single prompt")
 }
 
 func (lf *listFilter) build() (func(session.Meta) bool, error) {
@@ -146,7 +156,11 @@ func (lf *listFilter) build() (func(session.Meta) bool, error) {
 	if !lf.includeCurrent {
 		current = os.Getenv("CLAUDE_CODE_SESSION_ID")
 	}
+	hideOneShot := lf.oneShotFlag && !lf.all
 	return func(m session.Meta) bool {
+		if hideOneShot && m.Prompts < 2 {
+			return false
+		}
 		if current != "" && m.ID == current {
 			return false
 		}
@@ -165,6 +179,7 @@ func runList(args []string, w, _ io.Writer) error {
 	var lf listFilter
 	fs := newFlags("list", &c)
 	lf.register(fs)
+	lf.registerAll(fs)
 	limit := fs.Int("limit", 50, "max sessions to print (0 = no limit)")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -500,6 +515,7 @@ func runPick(args []string, _, errw io.Writer) error {
 	noPull := fs.Bool("no-pull", false, "skip pulling from the hub")
 	var lf listFilter
 	lf.register(fs)
+	lf.registerAll(fs)
 	var words []string
 	for len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		words, args = append(words, args[0]), args[1:]

@@ -63,6 +63,7 @@ ccreel show <id> --last 3 --json
 ccreel list --since 1d --limit 0 --json
 ```
 
+`list` hides sessions with a single prompt; add `--all` when a one-off question matters too.
 Each line's `title` and `first_prompt` are usually enough to group the work. Run `outline` only
 for sessions whose topic is unclear from those two fields. Use `--since 7d` for the week.
 
