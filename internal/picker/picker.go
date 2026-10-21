@@ -10,27 +10,50 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/yktsnet/ccreel/internal/session"
 )
 
-// Line は fzf に渡す1行。先頭の列は UUID 全体で、画面には出さず、選ばれた行から ID を取り出すのに使う。
-func Line(m session.Meta) string {
+const (
+	dim   = "\x1b[2m"
+	reset = "\x1b[0m"
+)
+
+// Line は fzf に渡す1行で、列は「UUID・題・@リポ #番号・いつ」。UUID は画面に出さず、選ばれた行から ID を取り出すのに使う。
+// 狭いペインでもまず題が見えるよう題を先頭に置き、リポと日時は後ろに薄く出す。
+// fzf の中で @リポ・#番号 と打てば、その語にだけ当たる。題の中の同じ言葉と混ざらない
+func Line(m session.Meta, now time.Time) string {
 	title := m.Title
 	if title == "" {
 		title = m.FirstPrompt
 	}
 	title = strings.Join(strings.Fields(title), " ")
-	// fzf の中で @リポ・#番号 と打てば、その列にだけ当たる。題の中の同じ言葉と混ざらない
-	repo := "@" + m.Repo
-	if m.Repo == "" {
-		repo = "-"
+	var tags []string
+	if m.Repo != "" {
+		tags = append(tags, "@"+m.Repo)
 	}
-	issue := ""
 	if m.Issue != "" {
-		issue = "#" + m.Issue
+		tags = append(tags, "#"+m.Issue)
 	}
-	return fmt.Sprintf("%s\t%s\t%-20s\t%-6s\t%s", m.ID, m.Updated.Local().Format("01-02 15:04"), repo, issue, title)
+	return fmt.Sprintf("%s\t%s\t%s%s%s\t%s%s%s", m.ID, title, dim, strings.Join(tags, " "), reset, dim, Ago(m.Updated, now), reset)
+}
+
+// Ago は一覧に出す日の目安。探すときに要るのは日付そのものより「今日か昨日か、何日前か」なので、
+// 時刻ではなく手元の暦の日で数える。30日を超えたら月日にする
+func Ago(t, now time.Time) string {
+	y1, m1, d1 := t.Local().Date()
+	y2, m2, d2 := now.Local().Date()
+	days := int(time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC).Sub(time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC)).Hours() / 24)
+	switch {
+	case days <= 0:
+		return "TDY"
+	case days == 1:
+		return "YDY"
+	case days <= 30:
+		return fmt.Sprintf("%dd", days)
+	}
+	return t.Local().Format("01-02")
 }
 
 type Options struct {
@@ -49,19 +72,26 @@ func Pick(metas []session.Meta, o Options) (string, error) {
 		return "", fmt.Errorf("no sessions in %s", o.ConfigDir)
 	}
 	var in bytes.Buffer
+	now := time.Now()
 	for _, m := range metas {
-		in.WriteString(Line(m))
+		in.WriteString(Line(m, now))
 		in.WriteByte('\n')
 	}
-	preview := fmt.Sprintf("%s show {1} --config-dir %s --last 4 --final --max-chars 800",
-		shellQuote(o.Self), shellQuote(o.ConfigDir))
+	preview := fmt.Sprintf("%s preview {1} --config-dir %s", shellQuote(o.Self), shellQuote(o.ConfigDir))
+	// プレビューは Markdown なので、bat があれば色を付けて読ませる
+	if bat, err := exec.LookPath("bat"); err == nil {
+		preview += " | " + shellQuote(bat) + " --language md --style plain --color always --paging never --theme ansi"
+	}
 	args := []string{
-		// --no-sort で、絞り込んでも渡した順（新しい順か find の順位）を保つ
-		"--delimiter", "\t", "--with-nth", "2..", "--no-sort",
-		"--layout", "reverse", "--height", "100%",
-		"--preview", preview, "--preview-window", "right,55%,wrap",
+		// --no-sort で、絞り込んでも渡した順（新しい順か find の順位）を保つ。
+		// --nth で、題と @リポ #番号 だけを絞り込みの対象にする。日時の列に「12」が当たらないように
+		"--delimiter", "\t", "--with-nth", "2..", "--nth", "1,2", "--no-sort", "--ansi", "--tabstop", "2",
+		// 全画面で開く。--height の表示は閉じたあとも描いたものが残り、resume した claude の画面と重なる
+		"--layout", "reverse", "--no-height",
+		// 幅が足りない端末では、題を切らないようにプレビューを下へ回す。fzf の <N は端末ではなくプレビュー欄の幅で比べる
+		"--preview", preview, "--preview-window", "right,55%,wrap,<60(down,45%,wrap)",
 		"--bind", "ctrl-/:toggle-preview",
-		"--header", "Enter: resume  /  Ctrl-/: toggle preview  /  @repo #issue to narrow",
+		"--header", "enter: resume · ctrl-/: preview · @repo #issue narrows",
 		"--query", o.Query,
 	}
 	args = append(args, o.Extra...)
