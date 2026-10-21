@@ -2,15 +2,19 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/yktsnet/ccreel/internal/finder"
 	"github.com/yktsnet/ccreel/internal/hubsync"
 	"github.com/yktsnet/ccreel/internal/picker"
 	"github.com/yktsnet/ccreel/internal/session"
@@ -24,6 +28,7 @@ Commands:
   list              List sessions, newest first
   show <id>         Print the turns of a session
   outline <id>      Print one line per turn of a session
+  find <words>      Rank sessions by #issue, @repo and words; says whether one stands out
   search <query>    Find where a phrase appears across sessions
   push              Send local sessions to the hub (the first push sends all of them)
   pull              Fetch recent sessions from the hub into the local config dir
@@ -31,6 +36,7 @@ Commands:
 <id> may be any unique prefix of the session UUID.
 The hub is an rsync destination such as host:path, given by --hub or CCREEL_HUB.
 Arguments after -- in pick and resume are passed to claude.
+CCREEL_CONFIG_DIRS (colon-separated) adds config dirs that find, show, outline and resume also look in.
 Run 'ccreel <command> -h' for flags.
 `
 
@@ -46,6 +52,7 @@ func main() {
 		"show":    runShow,
 		"outline": runOutline,
 		"search":  runSearch,
+		"find":    runFind,
 		"push":    runPush,
 		"pull":    runPull,
 	}
@@ -209,7 +216,7 @@ func runShow(args []string, w, errw io.Writer) error {
 	if err != nil {
 		return err
 	}
-	path, err := session.Find(c.configDir, id)
+	path, _, err := findSession(c.configDir, id)
 	if err != nil {
 		return err
 	}
@@ -329,7 +336,7 @@ func runOutline(args []string, w, _ io.Writer) error {
 	if err != nil {
 		return err
 	}
-	path, err := session.Find(c.configDir, id)
+	path, _, err := findSession(c.configDir, id)
 	if err != nil {
 		return err
 	}
@@ -491,9 +498,9 @@ func runPick(args []string, _, errw io.Writer) error {
 	noPull := fs.Bool("no-pull", false, "skip pulling from the hub")
 	var lf listFilter
 	lf.register(fs)
-	var query string
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		query, args = args[0], args[1:]
+	var words []string
+	for len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		words, args = append(words, args[0]), args[1:]
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -511,20 +518,29 @@ func runPick(args []string, _, errw io.Writer) error {
 		return err
 	}
 
-	var paths []string
-	if query != "" {
-		// 本文で絞ってから fzf に渡す。fzf の中の絞り込みは一覧の行（日時・リポ・題）にしか効かない
-		paths, err = session.Candidates(configDir, query)
-	} else {
-		paths, err = session.Discover(configDir)
-	}
-	if err != nil {
-		return err
-	}
 	var metas []session.Meta
-	for _, m := range session.ScanAll(paths) {
-		if keep(m) {
-			metas = append(metas, m)
+	if len(words) > 0 {
+		// 言葉があれば find と同じ順位で並べる。fzf に出る最初の数行が、Claude が find で選ぶ候補と同じになる
+		res, err := finder.Find(finder.ParseQuery(words), finder.Options{
+			ConfigDirs: []string{configDir}, CurrentRepo: currentRepo(), Exclude: os.Getenv("CLAUDE_CODE_SESSION_ID"),
+		})
+		if err != nil {
+			return err
+		}
+		for _, c := range res.Candidates {
+			if keep(c.Meta) {
+				metas = append(metas, c.Meta)
+			}
+		}
+	} else {
+		paths, err := session.Discover(configDir)
+		if err != nil {
+			return err
+		}
+		for _, m := range session.ScanAll(paths) {
+			if keep(m) {
+				metas = append(metas, m)
+			}
 		}
 	}
 	self, err := os.Executable()
@@ -552,7 +568,7 @@ func runResume(args []string, _, errw io.Writer) error {
 }
 
 func resume(configDir, id string, extra []string, errw io.Writer) error {
-	path, err := session.Find(configDir, id)
+	path, configDir, err := findSession(configDir, id)
 	if err != nil {
 		return err
 	}
@@ -588,6 +604,99 @@ func claudeEnv(configDir string) []string {
 		}
 	}
 	return append(out, "CLAUDE_CONFIG_DIR="+configDir)
+}
+
+// configDirs は primary を先頭に、CCREEL_CONFIG_DIRS の分を重ならないように足す。
+func configDirs(primary string) []string {
+	dirs := []string{filepath.Clean(primary)}
+	for _, d := range filepath.SplitList(os.Getenv("CCREEL_CONFIG_DIRS")) {
+		d = filepath.Clean(d)
+		if d != "." && !slices.Contains(dirs, d) {
+			dirs = append(dirs, d)
+		}
+	}
+	return dirs
+}
+
+// findSession は ID を全部の config dir から引き、見つかったパスと config dir を返す。
+// resume はその config dir で claude を起動する。
+func findSession(primary, id string) (string, string, error) {
+	dirs := configDirs(primary)
+	var path, dir string
+	for _, d := range dirs {
+		p, err := session.Find(d, id)
+		if errors.Is(err, session.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return "", "", err
+		}
+		if path != "" {
+			return "", "", fmt.Errorf("%q matches sessions in both %s and %s", id, dir, d)
+		}
+		path, dir = p, d
+	}
+	if path == "" {
+		return "", "", fmt.Errorf("%w: %q in %s", session.ErrNotFound, id, strings.Join(dirs, ", "))
+	}
+	return path, dir, nil
+}
+
+// currentRepo は呼ばれた場所のリポ名。worktree の中でも元のリポの名前を返す。git の外なら空。
+func currentRepo() string {
+	out, err := exec.Command("git", "rev-parse", "--path-format=absolute", "--git-common-dir").Output()
+	if err != nil {
+		return ""
+	}
+	return filepath.Base(filepath.Dir(strings.TrimSpace(string(out))))
+}
+
+func runFind(args []string, w, _ io.Writer) error {
+	var c common
+	fs := newFlags("find", &c)
+	limit := fs.Int("limit", 8, "max candidates")
+	var words []string
+	for len(args) > 0 {
+		if err := fs.Parse(args); err != nil {
+			return err
+		}
+		args = fs.Args()
+		if len(args) > 0 {
+			words, args = append(words, args[0]), args[1:]
+		}
+	}
+	res, err := finder.Find(finder.ParseQuery(words), finder.Options{
+		ConfigDirs: configDirs(c.configDir), CurrentRepo: currentRepo(),
+		Exclude: os.Getenv("CLAUDE_CODE_SESSION_ID"), Limit: *limit,
+	})
+	if err != nil {
+		return err
+	}
+	if c.asJSON {
+		return json.NewEncoder(w).Encode(res)
+	}
+	switch {
+	case len(res.Candidates) == 0:
+		fmt.Fprintln(w, "no sessions found")
+		return nil
+	case res.Decided:
+		fmt.Fprintln(w, "best match:")
+	default:
+		fmt.Fprintln(w, "several candidates; none stands out:")
+	}
+	for _, cd := range res.Candidates {
+		title := cd.Title
+		if title == "" {
+			title = oneLine(cd.FirstPrompt, 60)
+		}
+		issue := ""
+		if cd.Issue != "" {
+			issue = "#" + cd.Issue
+		}
+		fmt.Fprintf(w, "%4d  %s  %s  @%-18s %-6s %s\n      %s\n", cd.Score, shortID(cd.ID), cd.Updated.Local().Format("01-02 15:04"),
+			cd.Repo, issue, title, strings.Join(cd.Reasons, ", "))
+	}
+	return nil
 }
 
 // time.ParseDuration は日の単位を持たないので、末尾の d だけ自前で読む。
