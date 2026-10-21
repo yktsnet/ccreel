@@ -25,46 +25,69 @@ Claude Code に「前に話したあの件」を探させると、一覧と全�
 > #417 の続きをやりたい
 
 ⏺ ccreel find 417 --json
-  → decided: true  1c0e662e  @app #417「月次の締め処理」  issue #417・title:締め
+  → decided: true  1c0e662e  @app #417「Lock invoices after month close」  issue #417 · body:417×6
 ⏺ ccreel outline 1c0e662e --json → ccreel show 1c0e662e --last 3 --json
   （直前の3ターンを読んで、続きから答える）
 ```
 
-どの候補が上か、1本に決め切れるかは CLI が点差で決め、Claude Code には毎回判断させない。決め切れなければ、読み込む前に候補を見せて聞く。人の `ccreel pick <言葉>` も同じ順位で並ぶ。
+候補の順位と、1本に決め切れるかどうかは CLI が点差で判定し、Claude Code には毎回判断させない。決め切れなければ、読む前に候補を見せて聞く。人が打つ `ccreel pick <言葉>` も同じ順位で並ぶ。点の付け方と判定の条件は [docs/search.md](docs/search.md) にある。
 
 ```mermaid
 flowchart TD
   human(["👤 ccreel pick 言葉"])
-  claude(["🤖 skill: ccreel find"])
-  subgraph F["ccreel（CLI）"]
-    parse{{"#番号・@リポ・語に<br/>読み分ける"}}
-    collect{{"全 config dir から<br/>rg で候補を集める"}}
-    rank{{"点を付けて並べる"}}
-    dec{"1位が抜けているか"}
-  end
+  claude(["🤖 skill"])
+  find{{"ccreel find<br/>点を付けて並べる"}}
+  human ==> find
+  claude --> find
+  find ==> fzf["fzf に同じ順で並ぶ"] ==> resume(["Enter で resume"])
+  find --> dec{"決め切れたか"}
   subgraph S["skill（Claude Code）"]
     read["outline → show で読む"]
-    ask(["候補を見せて聞く"])
+    ask["候補を見せて聞く"]
     retry["語を変えて探し直す"]
+    answer(["続きから答える"])
+    none(["見つからないと伝える"])
   end
-  human ==> parse
-  claude --> parse
-  parse --> collect --> rank
-  rank ==> fzf["fzf に同じ順で並ぶ"]
-  rank --> dec
   dec -->|"1本に決まる"| read
   dec -->|"決め切れない"| ask
   dec -->|"候補なし"| retry
+  ask -->|"選ばれた1本"| read
+  read --> answer
   retry -->|"1回だけ"| claude
+  retry -->|"2回目も無い"| none
 ```
-
-点の付け方と判定の条件は [docs/search.md](docs/search.md) にある。
 
 ### 端末をまたぐ: ハブは ssh と rsync があれば何でもよい
 
 macOS で始めた会話は、そのままでは Linux の端末の `claude --resume` に出てこない。
 ccreel では各端末が毎分ハブへ push し、`ccreel` を開くときに pull する。変わったものが無い回はハブにつながずに終わるので、毎分呼んでも負荷はかからない。
-ハブには ccreel を入れる必要がなく、VPS・Raspberry Pi・手元のディレクトリのどれでも置ける。仕組みは [docs/sync.md](docs/sync.md) にある。
+ハブには ccreel を入れる必要がなく、VPS・Raspberry Pi・手元のディレクトリのどれでも置ける。
+
+ハブでは、プロジェクト名と `"cwd"` の先頭のホームを `~` に置き換えて持つ。macOS の `/Users/alice` と Linux の `/home/alice` のどちらから送っても同じセッションは同じバイト列になり、pull した端末では自分のホームへ戻す。
+
+```mermaid
+flowchart TD
+  subgraph A["端末 A（macOS）"]
+    a1[/"projects/-Users-alice-src-app"/]
+    am[("mirror")]
+  end
+  subgraph H["ハブ（VPS など）"]
+    hub[("projects/~-src-app")]
+  end
+  subgraph B["端末 B（Linux）"]
+    bm[("mirror")]
+    b1[/"projects/-home-alice-src-app"/]
+    fzf{{"fzf"}}
+    cl(["claude --resume"])
+  end
+  a1 -->|"~ に置換"| am
+  am -.->|push| hub
+  hub -.->|pull| bm
+  bm -->|"ホームへ戻す"| b1
+  b1 ==> fzf ==> cl
+```
+
+仕組みは [docs/sync.md](docs/sync.md) にある。
 
 ## Quick Start
 
