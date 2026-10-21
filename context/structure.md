@@ -6,6 +6,7 @@ internal/session/           jsonl の読み出し
   session.go                  Discover（セッションを探す）・Find（UUID の先頭から引く）・Scan（一覧の1行を組み立てる）・ScanAll
   transcript.go               ReadTurns（セッションをターンに分ける）
   search.go                   Candidates（rg で候補を絞る）・Search（新しい順に読んで当たった箇所を返す）
+internal/pathmap/           プロジェクト名と jsonl の "cwd" の先頭のホームを、端末の形と `~` の形で相互に変換する
 testdata/projects/          架空のセッションで作った fixture。付属物（subagents/）と発言の無いセッションを含む
 .github/workflows/ci.yml    go vet と go test
 ```
@@ -24,4 +25,4 @@ config dir は `--config-dir`、無ければ `CLAUDE_CONFIG_DIR`、それも無�
 **ターン**は、人の発言1つと、次の発言の前までの応答をまとめた単位である。`show --turns` と `search` の `turn` は、ターンの番号を指す。
 `show` と `search` は既定でツールの入出力を出さない（`--tools` で出す）。上限で止めたときは、その旨を stderr に書き、stdout の JSON Lines には混ぜない。
 
-同期（push・pull）・パスの書き換え・fzf の画面はまだ無い。段取りは `PLAN.md`。
+同期（push・pull）と fzf の画面はまだ無い。段取りは `PLAN.md`。
