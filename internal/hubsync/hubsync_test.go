@@ -104,6 +104,11 @@ func TestPushThenPullAcrossMachines(t *testing.T) {
 		t.Errorf("mtime = %v, want %v (kept from the source)", fi.ModTime(), now)
 	}
 
+	// 変わったものが無ければ、ハブから何も取らない
+	if st, err := Pull(linux.opt); err != nil || st.Fetched != 0 {
+		t.Errorf("second pull: %+v, %v", st, err)
+	}
+
 	// pull したものを push し直しても、ハブの中身も日時も変わらない
 	before, _ := os.Stat(onHub)
 	if _, err := Push(linux.opt); err != nil {
@@ -139,8 +144,12 @@ func TestNewerSideWins(t *testing.T) {
 	if _, err := Push(linux.opt); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Pull(mac.opt); err != nil {
+	st, err := Pull(mac.opt)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if st.Fetched != 1 {
+		t.Errorf("fetched %d, want 1 (the session appended on linux)", st.Fetched)
 	}
 	got := read(t, filepath.Join(mac.opt.ConfigDir, "projects", "-Users-alice-src-demo", idA+".jsonl"))
 	if got != `{"cwd":"/Users/alice/src/demo","n":1}`+"\n"+`{"cwd":"/Users/alice/src/demo","n":2}`+"\n" {

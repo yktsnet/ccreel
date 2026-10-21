@@ -39,6 +39,7 @@ type Stats struct {
 	Staged      int  // push で mirror に書いた数
 	Sent        bool // push でハブへつないだか
 	Pruned      bool // push で古いものを消したか
+	Fetched     int  // pull でハブから取った数
 	Materialize int  // pull で config dir に書いた数
 }
 
@@ -152,19 +153,32 @@ func Pull(o Options) (Stats, error) {
 		return st, err
 	}
 	defer unlock()
-	list, err := o.Hub.listRecent(o.configName(), o.PullDays)
-	if err != nil || len(list) == 0 {
+	remote, err := o.Hub.listRecent(o.configName(), o.PullDays)
+	if err != nil || len(remote) == 0 {
 		return st, err
 	}
 	if err := os.MkdirAll(o.mirrorProjects(), 0o755); err != nil {
 		return st, err
 	}
-	args := append(rsyncArgs(o.Hub), "--files-from=-", o.Hub.rsyncPath(projectsRel(o.configName())), o.mirrorProjects()+"/")
-	if err := runRsync(args, strings.NewReader(strings.Join(list, "\n")+"\n")); err != nil {
-		return st, err
+	// ハブの方が新しいものだけを rsync に渡す。手元で作業中のセッションは写しの方が新しく、渡しても rsync --update が飛ばすだけになる。
+	// 何も無ければ rsync を起動しない
+	var fetch, all []string
+	for _, f := range remote {
+		all = append(all, f.Path)
+		mi, err := os.Stat(filepath.Join(o.mirrorProjects(), f.Path))
+		if err != nil || mi.ModTime().Unix() < f.MTime {
+			fetch = append(fetch, f.Path)
+		}
 	}
+	if len(fetch) > 0 {
+		args := append(rsyncArgs(o.Hub), "--files-from=-", o.Hub.rsyncPath(projectsRel(o.configName())), o.mirrorProjects()+"/")
+		if err := runRsync(args, strings.NewReader(strings.Join(fetch, "\n")+"\n")); err != nil {
+			return st, err
+		}
+	}
+	st.Fetched = len(fetch)
 	m := pathmap.New(o.Home)
-	for _, rel := range list {
+	for _, rel := range all {
 		n, err := materialize(o, m, rel)
 		st.Materialize += n
 		if err != nil {
