@@ -21,11 +21,16 @@ func Line(m session.Meta) string {
 		title = m.FirstPrompt
 	}
 	title = strings.Join(strings.Fields(title), " ")
-	repo := m.Repo
-	if repo == "" {
+	// fzf の中で @リポ・#番号 と打てば、その列にだけ当たる。題の中の同じ言葉と混ざらない
+	repo := "@" + m.Repo
+	if m.Repo == "" {
 		repo = "-"
 	}
-	return fmt.Sprintf("%s\t%s\t%-18s\t%s", m.ID, m.Updated.Local().Format("01-02 15:04"), repo, title)
+	issue := ""
+	if m.Issue != "" {
+		issue = "#" + m.Issue
+	}
+	return fmt.Sprintf("%s\t%s\t%-20s\t%-6s\t%s", m.ID, m.Updated.Local().Format("01-02 15:04"), repo, issue, title)
 }
 
 type Options struct {
@@ -55,7 +60,7 @@ func Pick(metas []session.Meta, o Options) (string, error) {
 		"--layout", "reverse", "--height", "100%",
 		"--preview", preview, "--preview-window", "right,55%,wrap",
 		"--bind", "ctrl-/:toggle-preview",
-		"--header", "Enter: resume  /  Ctrl-/: toggle preview",
+		"--header", "Enter: resume  /  Ctrl-/: toggle preview  /  @repo #issue to narrow",
 		"--query", o.Query,
 	}
 	args = append(args, o.Extra...)

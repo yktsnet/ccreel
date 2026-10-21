@@ -142,3 +142,16 @@ func TestListRepoIsExact(t *testing.T) {
 		}
 	}
 }
+
+func TestListIssue(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	for issue, want := range map[string]bool{"12": true, "#12": true, "1": false} {
+		var out bytes.Buffer
+		if err := runList([]string{"--issue", issue, "--json"}, &out, &out); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(out.String(), `"issue":"12"`); got != want {
+			t.Errorf("--issue %s: got %q", issue, out.String())
+		}
+	}
+}

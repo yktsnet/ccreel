@@ -111,12 +111,14 @@ func parseWithArg(fs *flag.FlagSet, args []string, what string) (string, error) 
 type listFilter struct {
 	since          string
 	repo           string
+	issue          string
 	includeCurrent bool
 }
 
 func (lf *listFilter) register(fs *flag.FlagSet) {
 	fs.StringVar(&lf.since, "since", "", "only sessions updated within this period (e.g. 12h, 7d)")
 	fs.StringVar(&lf.repo, "repo", "", "only sessions in this repo (exact name; worktrees count as their repo)")
+	fs.StringVar(&lf.issue, "issue", "", "only sessions for this issue number (taken from the branch or worktree name)")
 	fs.BoolVar(&lf.includeCurrent, "include-current", false, "keep the session running this command (CLAUDE_CODE_SESSION_ID)")
 }
 
@@ -140,6 +142,9 @@ func (lf *listFilter) build() (func(session.Meta) bool, error) {
 			return false
 		}
 		if !cutoff.IsZero() && m.Updated.Before(cutoff) {
+			return false
+		}
+		if lf.issue != "" && m.Issue != strings.TrimPrefix(lf.issue, "#") {
 			return false
 		}
 		return lf.repo == "" || m.Repo == lf.repo
@@ -182,6 +187,9 @@ func runList(args []string, w, _ io.Writer) error {
 		title := m.Title
 		if title == "" {
 			title = oneLine(m.FirstPrompt, 80)
+		}
+		if m.Issue != "" {
+			title = "#" + m.Issue + " " + title
 		}
 		fmt.Fprintf(w, "%s  %s  %-20s  %s\n", shortID(m.ID), m.Updated.Local().Format("2006-01-02 15:04"), m.Repo, title)
 	}

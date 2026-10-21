@@ -11,10 +11,11 @@ import (
 )
 
 func TestLine(t *testing.T) {
-	m := session.Meta{ID: "11111111-aaaa", Repo: "demo", FirstPrompt: "fix\nthe  parser", Updated: time.Date(2026, 3, 1, 9, 0, 0, 0, time.Local)}
+	m := session.Meta{ID: "11111111-aaaa", Repo: "demo", Issue: "417", FirstPrompt: "fix\nthe  parser", Updated: time.Date(2026, 3, 1, 9, 0, 0, 0, time.Local)}
 	got := Line(m)
 	cols := strings.Split(got, "\t")
-	if len(cols) != 4 || cols[0] != "11111111-aaaa" || cols[1] != "03-01 09:00" || strings.TrimSpace(cols[2]) != "demo" || cols[3] != "fix the parser" {
+	if len(cols) != 5 || cols[0] != "11111111-aaaa" || cols[1] != "03-01 09:00" || strings.TrimSpace(cols[2]) != "@demo" ||
+		strings.TrimSpace(cols[3]) != "#417" || cols[4] != "fix the parser" {
 		t.Errorf("Line = %q", got)
 	}
 	m.Title = "Fix parser"

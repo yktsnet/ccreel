@@ -28,6 +28,15 @@ Read the outline first to see where the session ended, then `show` only the turn
 `--repo` is an exact name. `--git-common-dir` gives the main checkout even inside a worktree, and
 sessions started in a worktree are listed under the repo they belong to.
 
+## Find the sessions for an issue
+
+```sh
+ccreel list --issue 417 --json
+```
+
+`issue` comes from the branch or worktree name (`task/417-...`, `.claude/worktrees/417-...`).
+Sessions on `main` or on branches without a leading number have no `issue`.
+
 ## Check whether a topic was discussed or decided
 
 ```sh
@@ -53,7 +62,7 @@ for sessions whose topic is unclear from those two fields. Use `--since 7d` for 
 
 | Command | Fields |
 |---|---|
-| `list` | `id`, `repo`, `cwd`, `branch`, `title`, `first_prompt`, `prompts`, `started`, `updated` |
+| `list` | `id`, `repo`, `cwd`, `branch`, `issue`, `title`, `first_prompt`, `prompts`, `started`, `updated` |
 | `outline` | `turn`, `time`, `prompt`, `reply`, `tools` |
 | `show` | `turn`, `time`, `prompt`, `messages[]` (`kind`: `text` / `tool_use` / `tool_result`, `tool`, `text`) |
 | `search` | `id`, `repo`, `title`, `updated`, `turn`, `kind`, `snippet` |
