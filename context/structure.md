@@ -11,6 +11,7 @@ internal/hubsync/           push・pull とハブの古いセッションの削�
   hub.go                      ハブ（host:path か手元のディレクトリ）への rsync と、ハブの側で走らせる sh のスクリプト
   hubsync.go                  Push・Pull。運ぶのはセッション本体の jsonl だけ。手元とハブのあいだに、ハブと同じ形の写し（mirror）を持つ
 internal/picker/            fzf で選ばせる（Pick）・resume の前に移るディレクトリを決める（ResumeDir）・claude を exec する（Resume）
+skills/ccreel/SKILL.md      利用者が Claude Code に入れる skill。どの場面でどのサブコマンドを呼ぶかを書く（本文は英語）
 testdata/projects/          架空のセッションで作った fixture。付属物（subagents/）と発言の無いセッションを含む
 .github/workflows/ci.yml    go vet と go test
 ```
