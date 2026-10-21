@@ -84,43 +84,29 @@ func (h Hub) mkdir(configName string) error {
 	return err
 }
 
-// listRecent は、更新から days 日以内のセッションと、そのセッションの付属物のディレクトリを、
-// projects からの相対パスで返す。rsync の --files-from にそのまま渡せる。
+// listRecent は、更新から days 日以内のセッションを projects からの相対パスで返す。
+// rsync の --files-from にそのまま渡せる。
 func (h Hub) listRecent(configName string, days int) ([]string, error) {
 	script := fmt.Sprintf(`cd %s 2>/dev/null || exit 0
-find . -mindepth 2 -maxdepth 2 -type f -name '*.jsonl' -mtime -%d
-echo --
-find . -mindepth 2 -maxdepth 2 -type d`, h.dir(configName), days)
+find . -mindepth 2 -maxdepth 2 -type f -name '*.jsonl' -mtime -%d`, h.dir(configName), days)
 	out, err := h.sh(script, nil)
 	if err != nil {
 		return nil, err
 	}
-	files, dirs, _ := strings.Cut(string(out), "--\n")
-	keep := map[string]bool{}
 	var list []string
-	for _, f := range strings.Fields(files) {
+	for _, f := range strings.Fields(string(out)) {
 		f = strings.TrimPrefix(f, "./")
 		if isSessionFile(f) {
 			list = append(list, f)
-			keep[strings.TrimSuffix(f, ".jsonl")] = true
-		}
-	}
-	for _, d := range strings.Fields(dirs) {
-		d = strings.TrimPrefix(d, "./")
-		if keep[d] {
-			list = append(list, d)
 		}
 	}
 	return list, nil
 }
 
-// prune は、更新から days 日を過ぎたセッションを付属物ごと消す。付属物は更新日を見ない。
-// 動いているセッションの付属物を、それ自体が古いという理由で消さないため。
+// prune は、更新から days 日を過ぎたセッションを消す。
 func (h Hub) prune(configName string, days int) error {
 	script := fmt.Sprintf(`cd %s 2>/dev/null || exit 0
-find . -mindepth 2 -maxdepth 2 -type f -name '*.jsonl' -mtime +%d | while read -r f; do
-  rm -rf "$f" "${f%%.jsonl}"
-done
+find . -mindepth 2 -maxdepth 2 -type f -name '*.jsonl' -mtime +%d -exec rm -f {} +
 find . -mindepth 1 -maxdepth 1 -type d -empty -exec rmdir {} +`, h.dir(configName), days)
 	_, err := h.sh(script, nil)
 	return err

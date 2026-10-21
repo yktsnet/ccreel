@@ -78,7 +78,7 @@ func TestPushThenPullAcrossMachines(t *testing.T) {
 
 	mac.write(t, "-Users-alice-src-demo/"+idA+".jsonl", `{"cwd":"/Users/alice/src/demo"}`+"\n", now)
 	mac.write(t, "-Users-alice-src-demo/"+idA+"/subagents/agent-1.jsonl", `{"cwd":"/Users/alice/src/demo"}`+"\n", now)
-	// セッションでないものは運ばない
+	// セッションの本体以外（付属物・memory/）は運ばない
 	mac.write(t, "-Users-alice-src-demo/memory/note.md", "x", now)
 
 	if _, err := Push(mac.opt); err != nil {
@@ -88,24 +88,22 @@ func TestPushThenPullAcrossMachines(t *testing.T) {
 	if got := read(t, onHub); got != `{"cwd":"~/src/demo"}`+"\n" {
 		t.Errorf("hub content = %q", got)
 	}
-	if exists(filepath.Join(hubRoot, ".claude", "projects", "~-src-demo", "memory")) {
-		t.Error("memory/ was pushed")
+	for _, name := range []string{"memory", idA} {
+		if exists(filepath.Join(hubRoot, ".claude", "projects", "~-src-demo", name)) {
+			t.Errorf("%s/ was pushed", name)
+		}
 	}
 
 	st, err := Pull(linux.opt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Materialize != 2 {
-		t.Errorf("materialized %d files, want 2", st.Materialize)
+	if st.Materialize != 1 {
+		t.Errorf("materialized %d files, want 1", st.Materialize)
 	}
 	local := filepath.Join(linux.opt.ConfigDir, "projects", "-home-alice-src-demo", idA+".jsonl")
 	if got := read(t, local); got != `{"cwd":"/home/alice/src/demo"}`+"\n" {
 		t.Errorf("local content = %q", got)
-	}
-	sub := filepath.Join(linux.opt.ConfigDir, "projects", "-home-alice-src-demo", idA, "subagents", "agent-1.jsonl")
-	if got := read(t, sub); got != `{"cwd":"/home/alice/src/demo"}`+"\n" {
-		t.Errorf("subagent content = %q", got)
 	}
 	if fi, _ := os.Stat(local); !fi.ModTime().Equal(now) {
 		t.Errorf("mtime = %v, want %v (kept from the source)", fi.ModTime(), now)
@@ -161,14 +159,12 @@ func TestPullWindowAndPrune(t *testing.T) {
 
 	mac.write(t, "-Users-alice-src-demo/"+idA+".jsonl", `{}`+"\n", now.Add(-35*24*time.Hour))
 	mac.write(t, "-Users-alice-src-demo/"+idOld+".jsonl", `{}`+"\n", now.Add(-45*24*time.Hour))
-	// 付属物はそれ自体が古くても、セッションが残る限り消さない
-	mac.write(t, "-Users-alice-src-demo/"+idA+"/tool-results/r.txt", "x", now.Add(-60*24*time.Hour))
 	if _, err := Push(mac.opt); err != nil {
 		t.Fatal(err)
 	}
 	hubDir := filepath.Join(hubRoot, ".claude", "projects", "~-src-demo")
-	if !exists(filepath.Join(hubDir, idA+".jsonl")) || !exists(filepath.Join(hubDir, idA, "tool-results", "r.txt")) {
-		t.Error("35-day-old session or its attachment was pruned from the hub")
+	if !exists(filepath.Join(hubDir, idA+".jsonl")) {
+		t.Error("35-day-old session was pruned from the hub")
 	}
 	if exists(filepath.Join(hubDir, idOld+".jsonl")) {
 		t.Error("45-day-old session is still on the hub")
