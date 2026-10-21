@@ -14,6 +14,7 @@ internal/picker/            fzf で選ばせる（Pick）・resume の前に移�
 skills/ccreel/SKILL.md      利用者が Claude Code に入れる skill。どの場面でどのサブコマンドを呼ぶかを書く（本文は英語）
 testdata/projects/          架空のセッションで作った fixture。付属物（subagents/）と発言の無いセッションを含む
 .github/workflows/ci.yml    go vet と go test
+flake.nix                   Nix のパッケージ。fzf・rg・rsync・ssh を PATH の後ろに足し、skill を share/ccreel/skills/ に置く
 ```
 
 ## データの流れ
