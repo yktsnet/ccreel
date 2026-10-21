@@ -1,28 +1,6 @@
 # Sync
 
-セッションは、ハブを通って端末の境界をまたぐ。
-
-```mermaid
-flowchart TD
-  subgraph A["端末 A（macOS）"]
-    a1[/"projects/-Users-alice-src-app"/]
-    am[("mirror")]
-  end
-  subgraph H["ハブ（VPS など）"]
-    hub[("projects/~-src-app")]
-  end
-  subgraph B["端末 B（Linux）"]
-    bm[("mirror")]
-    b1[/"projects/-home-alice-src-app"/]
-    fzf{{"fzf"}}
-    cl(["claude --resume"])
-  end
-  a1 -->|"~ に置換"| am
-  am -.->|push| hub
-  hub -.->|pull| bm
-  bm -->|"ホームへ戻す"| b1
-  b1 ==> fzf ==> cl
-```
+セッションをハブ経由で別の端末へ運ぶ仕組みである。図は [README](../README.md) の「端末をまたぐ」にある。
 
 ## ハブでの持ち方
 
