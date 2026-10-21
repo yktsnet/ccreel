@@ -60,6 +60,8 @@ testdata/          匿名化した fixture（実際の履歴は入れない）
 
 ```
 ccreel                      # pull してから fzf を開く。Enter で cwd へ移って claude --resume
+ccreel pick "fzf preview"   # 本文に検索語を含むセッションだけを fzf に出す
+ccreel resume 1c0e662e -- --permission-mode auto   # -- の後ろは claude へ渡す
 ccreel push                 # 手元の新しいセッションをハブへ送る。初回は手元の履歴を全部送る
 ccreel pull
 ccreel list --since 1d --repo ccreel --json
