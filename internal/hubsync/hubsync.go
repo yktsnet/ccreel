@@ -2,6 +2,8 @@
 //
 // 手元とハブのあいだに、ハブと同じ形（pathmap で ~ に置き換えた形）の写しを1つ持つ（mirror）。
 //
+// 運ぶのはセッションの本体の jsonl だけである。
+//
 //	push: config dir → mirror（手元の方が新しいものだけ変換して書く）→ rsync → ハブ
 //	pull: ハブ → rsync（直近 PullDays 日の分だけ）→ mirror → config dir（mirror の方が新しいものだけ戻して書く）
 //
@@ -83,8 +85,7 @@ func Pull(o Options) (Stats, error) {
 	if err := os.MkdirAll(o.mirrorProjects(), 0o755); err != nil {
 		return st, err
 	}
-	// --files-from は -a の再帰を外すので、付属物のディレクトリを辿らせるために -r を足す
-	args := append(rsyncArgs(o.Hub), "-r", "--files-from=-", o.Hub.rsyncPath(projectsRel(o.configName())), o.mirrorProjects()+"/")
+	args := append(rsyncArgs(o.Hub), "--files-from=-", o.Hub.rsyncPath(projectsRel(o.configName())), o.mirrorProjects()+"/")
 	if err := runRsync(args, strings.NewReader(strings.Join(list, "\n")+"\n")); err != nil {
 		return st, err
 	}
@@ -99,7 +100,9 @@ func Pull(o Options) (Stats, error) {
 	return st, nil
 }
 
-// stage は手元の方が新しいセッションと付属物を、ハブの形に変えて mirror へ書く。
+// stage は手元の方が新しいセッションを、ハブの形に変えて mirror へ書く。
+// 付属物（<uuid>/ の subagents・tool-results・workflows）は運ばない。resume に要るのは本体の jsonl だけで、
+// 付属物は本体と同じくらいの容量を占める。
 func stage(o Options, m pathmap.Mapper) (int, error) {
 	root := o.localProjects()
 	n := 0
@@ -120,8 +123,7 @@ func stage(o Options, m pathmap.Mapper) (int, error) {
 		}
 		hubProject := m.ProjectToHub(p.Name())
 		for _, e := range entries {
-			name := strings.TrimSuffix(e.Name(), ".jsonl")
-			if !uuidRe.MatchString(name) {
+			if !e.Type().IsRegular() || !isSessionFile(p.Name()+"/"+e.Name()) {
 				continue
 			}
 			src := filepath.Join(root, p.Name(), e.Name())
@@ -136,7 +138,7 @@ func stage(o Options, m pathmap.Mapper) (int, error) {
 	return n, nil
 }
 
-// materialize は mirror の1件（セッションか付属物のディレクトリ）を、手元の形に戻して config dir へ書く。
+// materialize は mirror のセッション1本を、手元の形に戻して config dir へ書く。
 func materialize(o Options, m pathmap.Mapper, rel string) (int, error) {
 	hubProject, rest, _ := strings.Cut(rel, "/")
 	src := filepath.Join(o.mirrorProjects(), hubProject, rest)
@@ -144,7 +146,7 @@ func materialize(o Options, m pathmap.Mapper, rel string) (int, error) {
 	return copyTree(src, dst, m.ContentFromHub)
 }
 
-// copyTree は src（ファイルかディレクトリ）を dst へ写す。dst の方が新しいか同じ日時のファイルは飛ばす。
+// copyTree は src を dst へ写す。dst の方が新しいか同じ日時のファイルは飛ばす。
 // .jsonl には conv を通し、それ以外はそのまま写す。書いたファイルには src の更新日時を付ける。
 func copyTree(src, dst string, conv func([]byte) []byte) (int, error) {
 	n := 0
@@ -231,10 +233,7 @@ func pruneLocal(projects string, days int) error {
 				continue
 			}
 			path := filepath.Join(dir, e.Name())
-			if err := os.RemoveAll(path); err != nil {
-				return err
-			}
-			if err := os.RemoveAll(strings.TrimSuffix(path, ".jsonl")); err != nil {
+			if err := os.Remove(path); err != nil {
 				return err
 			}
 		}

@@ -4,8 +4,8 @@ ccreel が扱うものの名前と境界。
 
 - **セッション**：`projects/<プロジェクト名>/<uuid>.jsonl` の1本。追記しかされず、1本は1台の端末でしか書かれない。
   UUID がセッションの同一性で、プロジェクト名は置き場にすぎない
-- **付属物**：`<uuid>/` 配下の `subagents/`・`tool-results/`・`workflows/`。セッションと一緒に運ぶ。
-  一覧には出さない
+- **付属物**：`<uuid>/` 配下の `subagents/`・`tool-results/`・`workflows/`。サブエージェントの中のやり取りや、
+  退避した大きなツール出力などが入る。resume には要らない。ハブへは運ばず、一覧にも出さない
 - **config dir**：`~/.claude`・`~/.claude-work` のように `CLAUDE_CONFIG_DIR` で切り替わる置き場。
   セッションは config dir をまたいで混ぜない
 - **プロジェクト名**：起動した cwd の `/` を `-` に置き換えた名前。端末ごとにホームのパスが違う
