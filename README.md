@@ -61,15 +61,14 @@ ccreel では各端末が毎分ハブへ push し、`ccreel` を開くときに 
 
 ```mermaid
 flowchart LR
-  subgraph A["端末 A"]
-    ca(["claude"]) --> pa[/"projects/"/]
+  subgraph A["端末 A（macOS）"]
+    ca(["claude"])
   end
-  hub[("ハブ<br/>ssh + rsync")]
-  subgraph B["端末 B"]
-    pb[/"projects/"/] ==> fzf{{"ccreel（fzf）"}} ==> cl(["claude --resume"])
+  hub[("ハブ（VPS など）")]
+  subgraph B["端末 B（Linux）"]
+    fb{{"ccreel (fzf)"}} ==> rb(["claude --resume"])
   end
-  pa -.->|"push（毎分）"| hub
-  hub -.->|"pull（ccreel を開くとき）"| pb
+  ca -.->|push| hub -.->|pull| fb
 ```
 
 ハブでは、プロジェクト名と `"cwd"` の先頭のホームを `~` に置き換えて持つ。macOS の `/Users/alice` と Linux の `/home/alice` のどちらから送っても同じセッションは同じバイト列になり、pull した端末では自分のホームへ戻す。

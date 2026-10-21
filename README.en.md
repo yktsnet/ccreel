@@ -61,15 +61,14 @@ The hub needs no ccreel installed; a VPS, a Raspberry Pi, or a local directory a
 
 ```mermaid
 flowchart LR
-  subgraph A["Machine A"]
-    ca(["claude"]) --> pa[/"projects/"/]
+  subgraph A["Machine A (macOS)"]
+    ca(["claude"])
   end
-  hub[("Hub<br/>ssh + rsync")]
-  subgraph B["Machine B"]
-    pb[/"projects/"/] ==> fzf{{"ccreel (fzf)"}} ==> cl(["claude --resume"])
+  hub[("Hub (VPS etc.)")]
+  subgraph B["Machine B (Linux)"]
+    fb{{"ccreel (fzf)"}} ==> rb(["claude --resume"])
   end
-  pa -.->|"push (every minute)"| hub
-  hub -.->|"pull (when opening ccreel)"| pb
+  ca -.->|push| hub -.->|pull| fb
 ```
 
 On the hub, the home prefix in project names and in `"cwd"` is replaced with `~`. Whether sent from `/Users/alice` on macOS or `/home/alice` on Linux, the same session becomes the same bytes, and the pulling machine maps it back to its own home.
