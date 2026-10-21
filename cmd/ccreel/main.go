@@ -425,8 +425,10 @@ func syncFlags(name string) (*flag.FlagSet, func() (hubsync.Options, error)) {
 	}
 }
 
+// タイマーから毎分呼ばれる前提で、送るものが無い回と、別の push・pull と重なった回は何も出さずに終える。
 func runPush(args []string, w, _ io.Writer) error {
 	fs, opts := syncFlags("push")
+	force := fs.Bool("force", false, "send the mirror to the hub even if nothing changed")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -434,11 +436,17 @@ func runPush(args []string, w, _ io.Writer) error {
 	if err != nil {
 		return err
 	}
+	o.Force = *force
 	st, err := hubsync.Push(o)
+	if err == hubsync.ErrBusy {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "pushed to %s (%d files updated)\n", o.Hub, st.Staged)
+	if st.Sent {
+		fmt.Fprintf(w, "pushed to %s (%d files updated)\n", o.Hub, st.Staged)
+	}
 	return nil
 }
 

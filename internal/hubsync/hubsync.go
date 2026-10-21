@@ -12,11 +12,13 @@
 package hubsync
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/yktsnet/ccreel/internal/pathmap"
@@ -27,15 +29,29 @@ type Options struct {
 	Home      string // 手元のホーム。ハブの形との変換に使う
 	Mirror    string // ハブと同じ形の写しの置き場。config dir ごとに分ける
 	Hub       Hub
-	PullDays  int // pull で運ぶ範囲。Claude Code の保持期間に合わせる
-	KeepDays  int // ハブと mirror に残す期間。PullDays より長くする
+	PullDays  int  // pull で運ぶ範囲。Claude Code の保持期間に合わせる
+	KeepDays  int  // ハブと mirror に残す期間。PullDays より長くする
+	Force     bool // 変わったものが無くてもハブへ送る（ハブを作り直したときなど）
 }
 
 // Stats は運んだ件数。表示に使う。
 type Stats struct {
-	Staged      int // push で mirror に書いた数
-	Materialize int // pull で config dir に書いた数
+	Staged      int  // push で mirror に書いた数
+	Sent        bool // push でハブへつないだか
+	Pruned      bool // push で古いものを消したか
+	Materialize int  // pull で config dir に書いた数
 }
+
+// ErrBusy は、同じ mirror を別の push か pull が使っているとき。タイマーと手動の実行が重なったときに返る。
+var ErrBusy = errors.New("another push or pull is running")
+
+const (
+	// push がハブへ送り終える前に失敗したことの印。次の push は、変わったものが無くても送り直す
+	pendingMark = ".push-pending"
+	// 最後に古いものを消した時刻。消すのは1日に1回で足りる
+	pruneMark  = ".last-prune"
+	pruneEvery = 24 * time.Hour
+)
 
 var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
@@ -54,30 +70,88 @@ func (o Options) localProjects() string { return filepath.Join(o.ConfigDir, "pro
 
 // Push は手元のセッションを mirror へ写し、ハブへ送り、ハブと mirror の古いものを消す。
 // 初回は手元のセッションが全部送られる（バックフィル）。
+// タイマーで毎分走らせる前提で、変わったものが無く、前回の送信も済んでいれば、ハブにはつながずに終える。
 func Push(o Options) (Stats, error) {
 	var st Stats
+	unlock, err := lock(o.Mirror)
+	if err != nil {
+		return st, err
+	}
+	defer unlock()
+
 	m := pathmap.New(o.Home)
 	n, err := stage(o, m)
 	st.Staged = n
 	if err != nil {
 		return st, err
 	}
-	if err := o.Hub.mkdir(o.configName()); err != nil {
+	pending := filepath.Join(o.Mirror, pendingMark)
+	if n == 0 && !o.Force && !exists(pending) {
+		return st, nil
+	}
+	if err := os.WriteFile(pending, nil, 0o644); err != nil {
 		return st, err
 	}
-	args := append(rsyncArgs(o.Hub), o.mirrorProjects()+"/", o.Hub.rsyncPath(projectsRel(o.configName())))
+	dest, err := o.Hub.destArgs(o.configName())
+	if err != nil {
+		return st, err
+	}
+	args := append(append(rsyncArgs(o.Hub), dest...), o.mirrorProjects()+"/", o.Hub.rsyncPath(projectsRel(o.configName())))
 	if err := runRsync(args, nil); err != nil {
 		return st, err
+	}
+	st.Sent = true
+	if err := os.Remove(pending); err != nil {
+		return st, err
+	}
+
+	mark := filepath.Join(o.Mirror, pruneMark)
+	if fi, err := os.Stat(mark); err == nil && time.Since(fi.ModTime()) < pruneEvery {
+		return st, nil
 	}
 	if err := o.Hub.prune(o.configName(), o.KeepDays); err != nil {
 		return st, err
 	}
-	return st, pruneLocal(o.mirrorProjects(), o.KeepDays)
+	if err := pruneLocal(o.mirrorProjects(), o.KeepDays); err != nil {
+		return st, err
+	}
+	st.Pruned = true
+	return st, os.WriteFile(mark, nil, 0o644)
+}
+
+func exists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+// lock は mirror を1つの push か pull にだけ使わせる。待たずに ErrBusy を返す。
+// 初回の push は数分かかるので、そのあいだに開いた picker を待たせないため。
+func lock(mirror string) (func(), error) {
+	if err := os.MkdirAll(mirror, 0o755); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(filepath.Join(mirror, ".lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, ErrBusy
+		}
+		return nil, err
+	}
+	return func() { f.Close() }, nil
 }
 
 // Pull はハブから直近 PullDays 日の分を mirror へ取り、手元の config dir へ戻す。
 func Pull(o Options) (Stats, error) {
 	var st Stats
+	unlock, err := lock(o.Mirror)
+	if err != nil {
+		return st, err
+	}
+	defer unlock()
 	list, err := o.Hub.listRecent(o.configName(), o.PullDays)
 	if err != nil || len(list) == 0 {
 		return st, err
@@ -106,6 +180,8 @@ func Pull(o Options) (Stats, error) {
 func stage(o Options, m pathmap.Mapper) (int, error) {
 	root := o.localProjects()
 	n := 0
+	// ハブと mirror から消える古さのものを運ぶと、消しては送り直すことを毎日くり返す
+	cutoff := time.Now().Add(-time.Duration(o.KeepDays) * 24 * time.Hour)
 	projects, err := os.ReadDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -124,6 +200,9 @@ func stage(o Options, m pathmap.Mapper) (int, error) {
 		hubProject := m.ProjectToHub(p.Name())
 		for _, e := range entries {
 			if !e.Type().IsRegular() || !isSessionFile(p.Name()+"/"+e.Name()) {
+				continue
+			}
+			if fi, err := e.Info(); err != nil || fi.ModTime().Before(cutoff) {
 				continue
 			}
 			src := filepath.Join(root, p.Name(), e.Name())
