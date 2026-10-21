@@ -14,6 +14,7 @@ internal/hubsync/           push・pull とハブの古いセッションの削�
 internal/picker/            fzf で選ばせる（Pick）・一覧の1行と更新日の表示（Line・Ago）・resume の前に移るディレクトリを決める（ResumeDir）・画面を消して claude を exec する（Resume）・tmux の新しいウィンドウで claude を開く（OpenWindow）
 skills/ccreel/SKILL.md      利用者が Claude Code に入れる skill。どの場面でどのサブコマンドを呼ぶかを書く（本文は英語）
 testdata/projects/          架空のセッションで作った fixture。付属物（subagents/）と発言の無いセッションを含む
+demo/                       README の GIF（demo.tape で撮る）。gensessions が架空のセッションを書き、claude の代わりに demo/claude を起動する
 .github/workflows/ci.yml    go vet と go test
 flake.nix                   Nix のパッケージ。fzf・rg・rsync・ssh を PATH の後ろに足し、skill を share/ccreel/skills/ に置く
 ```
@@ -61,4 +62,3 @@ config dir は `--config-dir`、無ければ `CLAUDE_CONFIG_DIR`、それも無�
 **ターン**は、人の発言1つと、次の発言の前までの応答をまとめた単位である。`show --turns` と `search` の `turn` は、ターンの番号を指す。
 `show` と `search` は既定でツールの入出力を出さない（`--tools` で出す）。上限で止めたときは、その旨を stderr に書き、stdout の JSON Lines には混ぜない。
 
-段取りは `PLAN.md` にある。

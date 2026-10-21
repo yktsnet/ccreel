@@ -2,7 +2,7 @@
 
 Claude Code のセッション履歴を端末間で共有し、fzf で選んで resume する Go の CLI。
 同じ中身を JSON でも出し、Claude Code が対話の中で過去の会話を調べられるようにする。
-完成条件と段取りは `PLAN.md`、設計判断は `JUDGE.md` にある。
+対応範囲は `README.md` の Scope、設計判断は `docs/design-decisions.md` にある。
 
 フェーズ: **MVP期**。
 

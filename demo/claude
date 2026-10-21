@@ -1,0 +1,4 @@
+#!/bin/sh
+# デモでは本物の claude を起動せず、何を resume するかだけを映す
+printf '\n  claude %s %s\n\n  (resumed in the directory where the session was started)\n' "$1" "$2"
+sleep 3
