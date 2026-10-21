@@ -40,20 +40,16 @@ func Line(m session.Meta, now time.Time) string {
 }
 
 // Ago は一覧に出す日の目安。探すときに要るのは日付そのものより「今日か昨日か、何日前か」なので、
-// 時刻ではなく手元の暦の日で数える。30日を超えたら月日にする
+// 時刻ではなく手元の暦の日で数える。9日前までは * に続けて日数（今日は *0、昨日は *1）、それより前は週（2w）で返す。
+// fzf はあいまいに当てるので、*1 が *10〜*19 にも当たらないよう、* を付けるのは1桁の日数だけにする
 func Ago(t, now time.Time) string {
 	y1, m1, d1 := t.Local().Date()
 	y2, m2, d2 := now.Local().Date()
-	days := int(time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC).Sub(time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC)).Hours() / 24)
-	switch {
-	case days <= 0:
-		return "TDY"
-	case days == 1:
-		return "YDY"
-	case days <= 30:
-		return fmt.Sprintf("%dd", days)
+	days := max(int(time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC).Sub(time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC)).Hours()/24), 0)
+	if days < 10 {
+		return fmt.Sprintf("*%d", days)
 	}
-	return t.Local().Format("01-02")
+	return fmt.Sprintf("%dw", days/7)
 }
 
 type Options struct {
@@ -84,14 +80,13 @@ func Pick(metas []session.Meta, o Options) (string, error) {
 	}
 	args := []string{
 		// --no-sort で、絞り込んでも渡した順（新しい順か find の順位）を保つ。
-		// --nth で、題と @リポ #番号 だけを絞り込みの対象にする。日時の列に「12」が当たらないように
-		"--delimiter", "\t", "--with-nth", "2..", "--nth", "1,2", "--no-sort", "--ansi", "--tabstop", "2",
+		"--delimiter", "\t", "--with-nth", "2..", "--no-sort", "--ansi", "--tabstop", "2",
 		// 全画面で開く。--height の表示は閉じたあとも描いたものが残り、resume した claude の画面と重なる
 		"--layout", "reverse", "--no-height",
 		// 幅が足りない端末では、題を切らないようにプレビューを下へ回す。fzf の <N は端末ではなくプレビュー欄の幅で比べる
 		"--preview", preview, "--preview-window", "right,55%,wrap,<60(down,45%,wrap)",
 		"--bind", "ctrl-/:toggle-preview",
-		"--header", "enter: resume · ctrl-/: preview · @repo #issue narrows",
+		"--header", "enter: resume · ctrl-/: preview · narrow with @repo #issue *0 (today) *1 …",
 		"--query", o.Query,
 	}
 	args = append(args, o.Extra...)

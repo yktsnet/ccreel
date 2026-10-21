@@ -16,7 +16,7 @@ func TestLine(t *testing.T) {
 	cols := strings.Split(Line(m, now), "\t")
 	// 題を先頭に、@リポ #番号 と日は後ろに薄く出す
 	if len(cols) != 4 || cols[0] != "11111111-aaaa" || cols[1] != "fix the parser" ||
-		cols[2] != dim+"@demo #417"+reset || cols[3] != dim+"TDY"+reset {
+		cols[2] != dim+"@demo #417"+reset || cols[3] != dim+"*0"+reset {
 		t.Errorf("Line = %q", cols)
 	}
 	m.Title = "Fix parser"
@@ -31,11 +31,16 @@ func TestAgo(t *testing.T) {
 		t    time.Time
 		want string
 	}{
-		{now.Add(-20 * time.Minute), "TDY"},
+		{now.Add(-20 * time.Minute), "*0"},
 		// 時間ではなく暦の日で数える。日付をまたいだ1時間前は昨日
-		{now.Add(-time.Hour), "YDY"},
-		{time.Date(2026, 3, 7, 23, 0, 0, 0, time.Local), "3d"},
-		{time.Date(2026, 1, 5, 9, 0, 0, 0, time.Local), "01-05"},
+		{now.Add(-time.Hour), "*1"},
+		{time.Date(2026, 3, 7, 23, 0, 0, 0, time.Local), "*3"},
+		{time.Date(2026, 3, 1, 9, 0, 0, 0, time.Local), "*9"},
+		// 10日より前は * を付けず週で出す。*1 が *10 以降に当たらないように
+		{time.Date(2026, 2, 28, 9, 0, 0, 0, time.Local), "1w"},
+		{time.Date(2026, 1, 5, 9, 0, 0, 0, time.Local), "9w"},
+		// 時計のずれで未来の時刻が来ても今日にする
+		{now.Add(time.Hour), "*0"},
 	}
 	for _, c := range cases {
 		if got := Ago(c.t, now); got != c.want {
