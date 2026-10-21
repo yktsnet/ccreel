@@ -12,12 +12,15 @@ import (
 	"time"
 
 	"github.com/yktsnet/ccreel/internal/hubsync"
+	"github.com/yktsnet/ccreel/internal/picker"
 	"github.com/yktsnet/ccreel/internal/session"
 )
 
-const usage = `Usage: ccreel <command> [flags]
+const usage = `Usage: ccreel [command] [flags]
 
 Commands:
+  pick [query]      Pull, choose a session in fzf, and resume it (default command)
+  resume <id>       Resume a session in its recorded directory
   list              List sessions, newest first
   show <id>         Print the turns of a session
   outline <id>      Print one line per turn of a session
@@ -27,15 +30,18 @@ Commands:
 
 <id> may be any unique prefix of the session UUID.
 The hub is an rsync destination such as host:path, given by --hub or CCREEL_HUB.
+Arguments after -- in pick and resume are passed to claude.
 Run 'ccreel <command> -h' for flags.
 `
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usage)
-		os.Exit(2)
+	args := os.Args[1:]
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") && args[0] != "-h" && args[0] != "--help" {
+		args = append([]string{"pick"}, args...)
 	}
 	cmds := map[string]func([]string, io.Writer, io.Writer) error{
+		"pick":    runPick,
+		"resume":  runResume,
 		"list":    runList,
 		"show":    runShow,
 		"outline": runOutline,
@@ -43,7 +49,7 @@ func main() {
 		"push":    runPush,
 		"pull":    runPull,
 	}
-	name := os.Args[1]
+	name := args[0]
 	if name == "-h" || name == "--help" || name == "help" {
 		fmt.Print(usage)
 		return
@@ -53,8 +59,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "ccreel: unknown command %q\n\n%s", name, usage)
 		os.Exit(2)
 	}
-	if err := run(os.Args[2:], os.Stdout, os.Stderr); err != nil {
-		if err == flag.ErrHelp {
+	if err := run(args[1:], os.Stdout, os.Stderr); err != nil {
+		if err == flag.ErrHelp || err == picker.ErrCancelled {
 			return
 		}
 		fmt.Fprintf(os.Stderr, "ccreel: %v\n", err)
@@ -440,6 +446,121 @@ func runPull(args []string, w, _ io.Writer) error {
 	}
 	fmt.Fprintf(w, "pulled from %s (%d files updated)\n", o.Hub, st.Materialize)
 	return nil
+}
+
+// splitPassthrough は -- より後ろを claude へ渡す引数として切り離す。
+func splitPassthrough(args []string) (own, rest []string) {
+	for i, a := range args {
+		if a == "--" {
+			return args[:i], args[i+1:]
+		}
+	}
+	return args, nil
+}
+
+func runPick(args []string, _, errw io.Writer) error {
+	args, extra := splitPassthrough(args)
+	fs, opts := syncFlags("pick")
+	noPull := fs.Bool("no-pull", false, "skip pulling from the hub")
+	var lf listFilter
+	lf.register(fs)
+	var query string
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		query, args = args[0], args[1:]
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	o, err := opts()
+	// ハブが未設定でも、手元の履歴だけで選べるようにする
+	if err == nil && !*noPull {
+		if _, err := hubsync.Pull(o); err != nil {
+			fmt.Fprintf(errw, "ccreel: pull failed, showing local sessions only: %v\n", err)
+		}
+	}
+	configDir := fs.Lookup("config-dir").Value.String()
+	keep, err := lf.build()
+	if err != nil {
+		return err
+	}
+
+	var paths []string
+	if query != "" {
+		// 本文で絞ってから fzf に渡す。fzf の中の絞り込みは一覧の行（日時・リポ・題）にしか効かない
+		paths, err = session.Candidates(configDir, query)
+	} else {
+		paths, err = session.Discover(configDir)
+	}
+	if err != nil {
+		return err
+	}
+	var metas []session.Meta
+	for _, m := range session.ScanAll(paths) {
+		if keep(m) {
+			metas = append(metas, m)
+		}
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	id, err := picker.Pick(metas, picker.Options{
+		Self: self, ConfigDir: configDir, Extra: strings.Fields(os.Getenv("CCREEL_FZF_OPTS")),
+	})
+	if err != nil {
+		return err
+	}
+	return resume(configDir, id, extra, errw)
+}
+
+func runResume(args []string, _, errw io.Writer) error {
+	args, extra := splitPassthrough(args)
+	var c common
+	fs := newFlags("resume", &c)
+	id, err := parseWithArg(fs, args, "session id")
+	if err != nil {
+		return err
+	}
+	return resume(c.configDir, id, extra, errw)
+}
+
+func resume(configDir, id string, extra []string, errw io.Writer) error {
+	path, err := session.Find(configDir, id)
+	if err != nil {
+		return err
+	}
+	m, err := session.Scan(path)
+	if err != nil {
+		return err
+	}
+	home, _ := os.UserHomeDir()
+	dir := picker.ResumeDir(m.CWD, home)
+	if dir != m.CWD {
+		fmt.Fprintf(errw, "ccreel: %s is not here; resuming in %s\n", m.CWD, dir)
+	}
+	claude := os.Getenv("CCREEL_CLAUDE")
+	if claude == "" {
+		claude = "claude"
+	}
+	return picker.Resume(claude, m.ID, dir, extra, claudeEnv(configDir))
+}
+
+// claude には選んだのと同じ config dir を見せる。既定の ~/.claude のときに CLAUDE_CONFIG_DIR を新たに
+// 立てると、macOS では認証情報の置き場の名前が変わるので、既定のときは環境をそのまま渡す。
+func claudeEnv(configDir string) []string {
+	env := os.Environ()
+	home, _ := os.UserHomeDir()
+	if os.Getenv("CLAUDE_CONFIG_DIR") == "" && filepath.Clean(configDir) == filepath.Join(home, ".claude") {
+		return env
+	}
+	// 同じ名前が2つあると先のものが読まれるので、元の値を除いてから足す
+	out := env[:0:0]
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, "CLAUDE_CONFIG_DIR=") {
+			out = append(out, kv)
+		}
+	}
+	return append(out, "CLAUDE_CONFIG_DIR="+configDir)
 }
 
 // time.ParseDuration は日の単位を持たないので、末尾の d だけ自前で読む。

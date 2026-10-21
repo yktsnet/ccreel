@@ -10,6 +10,7 @@ internal/pathmap/           プロジェクト名と jsonl の "cwd" の先頭�
 internal/hubsync/           push・pull とハブの古いセッションの削除
   hub.go                      ハブ（host:path か手元のディレクトリ）への rsync と、ハブの側で走らせる sh のスクリプト
   hubsync.go                  Push・Pull。手元とハブのあいだに、ハブと同じ形の写し（mirror）を持つ
+internal/picker/            fzf で選ばせる（Pick）・resume の前に移るディレクトリを決める（ResumeDir）・claude を exec する（Resume）
 testdata/projects/          架空のセッションで作った fixture。付属物（subagents/）と発言の無いセッションを含む
 .github/workflows/ci.yml    go vet と go test
 ```
@@ -20,7 +21,8 @@ testdata/projects/          架空のセッションで作った fixture。付�
 <config dir>/projects/*/*.jsonl
   ├─ Discover → ScanAll(Scan) → []Meta  → list
   ├─ Find → ReadTurns → []Turn          → show / outline
-  └─ Candidates(rg) → Search            → search
+  ├─ Candidates(rg) → Search            → search
+  └─ pull → Discover（検索語があれば Candidates）→ ScanAll → fzf → Find → ResumeDir → claude --resume → pick
 
 push: <config dir>/projects → mirror（ContentToHub）→ rsync → <hub>/<config dir 名>/projects
 pull: <hub>/<config dir 名>/projects → rsync（直近30日）→ mirror → <config dir>/projects（ContentFromHub）
@@ -29,9 +31,11 @@ pull: <hub>/<config dir 名>/projects → rsync（直近30日）→ mirror → <
 mirror は既定で `$XDG_CACHE_HOME/ccreel/<config dir 名>` に置く。mirror に書いたファイルには元の更新日時を付け直す。
 pull で運んだものを push しても、rsync が差分なしと判定するためである。
 
+引数なしの `ccreel` は `pick` と同じ。pull は、ハブが設定されていて `--no-pull` を付けていないときだけ行う。pull に失敗しても、手元のセッションで一覧を出す。
+
 config dir は `--config-dir`、無ければ `CLAUDE_CONFIG_DIR`、それも無ければ `~/.claude` を使う。
 
 **ターン**は、人の発言1つと、次の発言の前までの応答をまとめた単位である。`show --turns` と `search` の `turn` は、ターンの番号を指す。
 `show` と `search` は既定でツールの入出力を出さない（`--tools` で出す）。上限で止めたときは、その旨を stderr に書き、stdout の JSON Lines には混ぜない。
 
-fzf の画面と resume はまだ無い。段取りは `PLAN.md` にある。
+段取りは `PLAN.md` にある。

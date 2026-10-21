@@ -87,3 +87,26 @@ func TestShowMaxTotal(t *testing.T) {
 		t.Errorf("stderr = %q", errw.String())
 	}
 }
+
+func TestSplitPassthrough(t *testing.T) {
+	own, rest := splitPassthrough([]string{"fzf", "--no-pull", "--", "--model", "x"})
+	if fmt.Sprint(own) != "[fzf --no-pull]" || fmt.Sprint(rest) != "[--model x]" {
+		t.Errorf("got %v %v", own, rest)
+	}
+}
+
+func TestClaudeEnvReplacesConfigDir(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "/old")
+	n := 0
+	for _, kv := range claudeEnv("/new") {
+		if strings.HasPrefix(kv, "CLAUDE_CONFIG_DIR=") {
+			n++
+			if kv != "CLAUDE_CONFIG_DIR=/new" {
+				t.Errorf("got %q", kv)
+			}
+		}
+	}
+	if n != 1 {
+		t.Errorf("CLAUDE_CONFIG_DIR appears %d times", n)
+	}
+}
