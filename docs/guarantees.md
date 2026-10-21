@@ -102,14 +102,16 @@
 | `"cwd"` の往復 | `TestContentRoundTrip` |
 | 端末をまたいだ往復と、送り直しで同じバイト列 | `TestProjectRoundTrip`, `TestContentRoundTrip` |
 
-### 5. `internal/picker/picker_test.go` — internal/picker (Line / ResumeDir)
+### 5. `internal/picker/picker_test.go` — internal/picker (Line / Ago / ResumeDir)
 
-- `Line` は fzf の1行を「UUID・日時・`@リポ`・`#番号`・題」のタブ区切りで作る。題が無ければ最初の発言を1行にして使う
+- `Line` は fzf の1行を「UUID・題・`@リポ #番号`・更新日」のタブ区切りで作り、`@リポ #番号` と更新日は薄い色で出す。題が無ければ最初の発言を1行にして題の代わりに使う
+- `Ago` は、手元の暦で日数を数え、今日は `TDY`、昨日は `YDY`、30日までは `3d` の形、それより前は月日で返す
 - `ResumeDir` は、記録された cwd があればそこを、無ければ手元にある一番近い祖先を返す。祖先がホームそのもの、またはホームより上になるとき、および cwd が空のときは、ホームを返す
 
 | 保証（要約） | 対応テスト |
 |---|---|
 | fzf の1行の形 | `TestLine` |
+| 手元の暦での日数の数え方 | `TestAgo` |
 | resume で入るディレクトリ | `TestResumeDir` |
 
 *（この節には `Line` と `ResumeDir` が混在するので、行ごとに主語を明示している）*
@@ -152,7 +154,7 @@
 | ID の引き方 | `TestFind` |
 | compact の要約を数えない | `TestPromptTextSkipsCompactSummary` |
 
-### 9. `cmd/ccreel/cli_test.go` — cmd/ccreel (resume / show / outline / find / pick / push)
+### 9. `cmd/ccreel/cli_test.go` — cmd/ccreel (resume / show / outline / find / pick / push / preview)
 
 - `resume` は、`CCREEL_CONFIG_DIRS` のどの config dir にあるセッションでも ID から引き、記録された cwd へ移って、そのセッションのある config dir を `CLAUDE_CONFIG_DIR` にして claude を起動する
 - `show` と `outline` は、`CCREEL_CONFIG_DIRS` の別の config dir にあるセッションも ID から引く
@@ -160,6 +162,7 @@
 - `pick <言葉>` は、`find` と同じ順位で fzf に行を渡す
 - `outline --json` の項目は `turn`・`time`・`prompt`・`reply`・`tools`、`search --json` の項目は `id`・`repo`・`title`・`updated`・`turn`・`kind`・`snippet` である
 - `push` は、送らなかった回に stdout にも stderr にも何も出さない
+- `preview` は、題・`@リポ`・`#番号`・ブランチを先頭にまとめ、その下に新しいターンから順に、発言と最終応答を Markdown で並べる
 
 | 保証（要約） | 対応テスト |
 |---|---|
@@ -169,6 +172,7 @@
 | `pick <言葉>` の並びは `find` の順位 | `TestPickWithWordsUsesFindOrder` |
 | `outline` と `search` の JSON の項目 | `TestOutlineAndSearchJSONFields` |
 | 送らなかった回は何も出さない | `TestPushIsQuietWhenNothingIsSent` |
+| `preview` の形と並び | `TestPreviewIsNewestFirstMarkdown` |
 
 *（この節には複数のサブコマンドが混在するので、行ごとに主語を明示している）*
 
@@ -176,6 +180,8 @@
 
 以下は保証すべきと思われるが、対応するテストが無い。
 
+- picker の絞り込みが、題と `@リポ #番号` だけに当たり、更新日の列には当たらないこと（`12` と打っても12月の行が残らない）。fzf を対話で動かす必要があり、自動のテストでは確かめられない。tmux の中で手で確かめた
+- picker で選んだあと、claude を起動する前に端末の画面を消し、fzf の表示と claude の表示が重ならないこと。実際の端末でしか確かめられない。WSL と macOS の tmux の中で手で確かめた
 - ハブが BSD の `stat` しか持たないときにも、`Pull` が更新日時つきの一覧を取れること。手元にも CI にも BSD の環境が無く、通るかを確かめられない。GNU の `stat` の環境でしか通していない
 
 ## About

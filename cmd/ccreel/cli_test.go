@@ -219,3 +219,21 @@ func TestPushIsQuietWhenNothingIsSent(t *testing.T) {
 		t.Errorf("push with nothing to send printed %q / %q", out.String(), errw.String())
 	}
 }
+
+func TestPreviewIsNewestFirstMarkdown(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	var out, errw bytes.Buffer
+	if err := runPreview([]string{"1111"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, want := range []string{"# Fix parser trailing token bug", "`@demo` · `#12` · `task/12-fix-parser`", "> Fix it and add a test"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("preview lacks %q:\n%s", want, got)
+		}
+	}
+	// 新しいターンを先に出す
+	if strings.Index(got, "**turn 2**") > strings.Index(got, "**turn 1**") {
+		t.Errorf("turns are not newest first:\n%s", got)
+	}
+}
