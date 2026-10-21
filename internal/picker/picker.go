@@ -143,6 +143,12 @@ func Resume(claude, id, dir string, extra, env []string) error {
 	if err := os.Chdir(dir); err != nil {
 		return err
 	}
+	// fzf が描いたものが端末に残っていると、claude の信頼の確認のように画面を消さずに描く表示が重なって崩れる。
+	// claude に渡す前に画面を消す
+	if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
+		tty.WriteString("\x1b[H\x1b[2J\x1b[3J")
+		tty.Close()
+	}
 	argv := append([]string{filepath.Base(claude), "--resume", id}, extra...)
 	return syscall.Exec(path, argv, env)
 }
