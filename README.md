@@ -59,29 +59,20 @@ macOS で始めた会話は、そのままでは Linux の端末の `claude --re
 ccreel では各端末が毎分ハブへ push し、`ccreel` を開くときに pull する。変わったものが無い回はハブにつながずに終わるので、毎分呼んでも負荷はかからない。
 ハブには ccreel を入れる必要がなく、VPS・Raspberry Pi・手元のディレクトリのどれでも置ける。
 
-ハブでは、プロジェクト名と `"cwd"` の先頭のホームを `~` に置き換えて持つ。macOS の `/Users/alice` と Linux の `/home/alice` のどちらから送っても同じセッションは同じバイト列になり、pull した端末では自分のホームへ戻す。
-
 ```mermaid
-flowchart TD
-  subgraph A["端末 A（macOS）"]
-    a1[/"projects/-Users-alice-src-app"/]
-    am[("mirror")]
+flowchart LR
+  subgraph A["端末 A"]
+    ca(["claude"]) --> pa[/"projects/"/]
   end
-  subgraph H["ハブ（VPS など）"]
-    hub[("projects/~-src-app")]
+  hub[("ハブ<br/>ssh + rsync")]
+  subgraph B["端末 B"]
+    pb[/"projects/"/] ==> fzf{{"ccreel（fzf）"}} ==> cl(["claude --resume"])
   end
-  subgraph B["端末 B（Linux）"]
-    bm[("mirror")]
-    b1[/"projects/-home-alice-src-app"/]
-    fzf{{"fzf"}}
-    cl(["claude --resume"])
-  end
-  a1 -->|"~ に置換"| am
-  am -.->|push| hub
-  hub -.->|pull| bm
-  bm -->|"ホームへ戻す"| b1
-  b1 ==> fzf ==> cl
+  pa -.->|"push（毎分）"| hub
+  hub -.->|"pull（ccreel を開くとき）"| pb
 ```
+
+ハブでは、プロジェクト名と `"cwd"` の先頭のホームを `~` に置き換えて持つ。macOS の `/Users/alice` と Linux の `/home/alice` のどちらから送っても同じセッションは同じバイト列になり、pull した端末では自分のホームへ戻す。
 
 仕組みは [docs/sync.md](docs/sync.md) にある。
 
@@ -134,9 +125,7 @@ fzf の操作・JSON の項目・環境変数・フラグは [docs/usage.md](doc
 
 - **セッションをファイル単位の rsync `--update` で合わせる**: jsonl は追記しかされず、1本は1台の端末でしか書かれないので、新しい方を残すだけで衝突しない
 - **ハブは置き場だけにし、一覧・検索・resume は手元の写しで行う**: 検索が速く、オフラインでも動き、Claude Code が何度呼んでもハブまで行かない
-- **運ぶのはセッション本体の jsonl だけにする**: resume に要るのは本体だけで、付属物は本体と同じくらいの容量を占める
 - **push は手元の mirror と比べ、変わったものがあるときだけハブにつなぐ**: 変わったものが無い回は数ミリ秒で終わるので、毎分呼べる
-- **config dir を分けずに1つの一覧に出す**: どの config dir で開いても会話の続きになり、リポの見分けは `@リポ` で足りる
 
 選択肢・決め手・再検討の境界と、技術の選定理由は [docs/design-decisions.md](docs/design-decisions.md) にある。
 

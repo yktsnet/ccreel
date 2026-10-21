@@ -59,29 +59,20 @@ A conversation started on macOS does not show up in `claude --resume` on a Linux
 With ccreel, each machine pushes to the hub every minute and pulls when you open `ccreel`. A run with nothing changed finishes without connecting to the hub, so calling it every minute costs nothing.
 The hub needs no ccreel installed; a VPS, a Raspberry Pi, or a local directory all work.
 
-On the hub, the home prefix in project names and in `"cwd"` is replaced with `~`. Whether sent from `/Users/alice` on macOS or `/home/alice` on Linux, the same session becomes the same bytes, and the pulling machine maps it back to its own home.
-
 ```mermaid
-flowchart TD
-  subgraph A["Machine A (macOS)"]
-    a1[/"projects/-Users-alice-src-app"/]
-    am[("mirror")]
+flowchart LR
+  subgraph A["Machine A"]
+    ca(["claude"]) --> pa[/"projects/"/]
   end
-  subgraph H["Hub (VPS etc.)"]
-    hub[("projects/~-src-app")]
+  hub[("Hub<br/>ssh + rsync")]
+  subgraph B["Machine B"]
+    pb[/"projects/"/] ==> fzf{{"ccreel (fzf)"}} ==> cl(["claude --resume"])
   end
-  subgraph B["Machine B (Linux)"]
-    bm[("mirror")]
-    b1[/"projects/-home-alice-src-app"/]
-    fzf{{"fzf"}}
-    cl(["claude --resume"])
-  end
-  a1 -->|"replace with ~"| am
-  am -.->|push| hub
-  hub -.->|pull| bm
-  bm -->|"map back to home"| b1
-  b1 ==> fzf ==> cl
+  pa -.->|"push (every minute)"| hub
+  hub -.->|"pull (when opening ccreel)"| pb
 ```
+
+On the hub, the home prefix in project names and in `"cwd"` is replaced with `~`. Whether sent from `/Users/alice` on macOS or `/home/alice` on Linux, the same session becomes the same bytes, and the pulling machine maps it back to its own home.
 
 How it works is in [docs/sync.md](docs/sync.md) (Japanese).
 
@@ -134,9 +125,7 @@ fzf keys, JSON fields, environment variables, and flags are in [docs/usage.md](d
 
 - **Sync sessions per file with rsync `--update`**: a jsonl is append-only and written by only one machine, so keeping the newer one never conflicts
 - **The hub only stores; listing, search, and resume run on the local copy**: search is fast, works offline, and Claude Code never reaches the hub however often it calls
-- **Carry only the session jsonl itself**: resume needs only the main file, while the attachments take about as much space again
 - **push compares against a local mirror and connects to the hub only when something changed**: an unchanged run finishes in milliseconds, so it can run every minute
-- **Show all config dirs in one list instead of separating them**: whichever config dir opens it, the conversation continues, and `@repo` is enough to tell repos apart
 
 Options, deciding factors, revisit criteria, and the reasons behind the tech choices are in [docs/design-decisions.md](docs/design-decisions.md) (Japanese).
 
