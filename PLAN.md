@@ -85,6 +85,7 @@ ccreel outline 1c0e662e --json
 | 8 | 同梱の skill | 4 | DoD の3つの用途を skill 経由でこなせる |
 | 9 | dotfiles 側の配線（flake input・`c` の差し替え・push のきっかけ・ctx と ctx-history-search の撤去） | 7, 8 | 1日使える |
 | 10 | デモ GIF と README（0 と同じ手順で ccreel を測り、比較表を載せる） | 0, 7, 8 | DoD の残りが満たされる |
+| 11 | `find`（Issue 番号・題・本文・同じリポ・新しさで点を付け、決め切れるかを返す）と、それを使う skill | 8 | 過去に ctx へ頼んだ3つの依頼で、正しいセッションが候補の上位に入る |
 
 ## 未確定の項目
 

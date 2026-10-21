@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -36,6 +37,9 @@ func Discover(configDir string) ([]string, error) {
 	return filepath.Glob(filepath.Join(configDir, "projects", "*", "*.jsonl"))
 }
 
+// ErrNotFound は、ID に当たるセッションが無いとき。
+var ErrNotFound = errors.New("no session matches")
+
 // Find は UUID の先頭の数文字からセッションを引く。候補が複数なら誤って開かないよう失敗させる。
 func Find(configDir, prefix string) (string, error) {
 	if prefix == "" || strings.Trim(prefix, "0123456789abcdef-") != "" {
@@ -47,7 +51,7 @@ func Find(configDir, prefix string) (string, error) {
 	}
 	switch len(paths) {
 	case 0:
-		return "", fmt.Errorf("no session matches %q in %s", prefix, configDir)
+		return "", fmt.Errorf("%w %q in %s", ErrNotFound, prefix, configDir)
 	case 1:
 		return paths[0], nil
 	}

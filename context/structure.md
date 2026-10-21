@@ -7,6 +7,7 @@ internal/session/           jsonl の読み出し
   transcript.go               ReadTurns（セッションをターンに分ける）
   search.go                   Candidates（rg で候補を絞る）・Search（新しい順に読んで当たった箇所を返す）
 internal/pathmap/           プロジェクト名と jsonl の "cwd" の先頭のホームを、端末の形と `~` の形で相互に変換する
+internal/finder/            言葉からセッションを探して順位を付ける（find と、言葉を渡した pick が使う）
 internal/hubsync/           push・pull とハブの古いセッションの削除
   hub.go                      ハブ（host:path か手元のディレクトリ）への rsync と、ハブの側で走らせる sh のスクリプト
   hubsync.go                  Push・Pull。運ぶのはセッション本体の jsonl だけ。手元とハブのあいだに、ハブと同じ形の写し（mirror）を持つ
@@ -24,7 +25,8 @@ flake.nix                   Nix のパッケージ。fzf・rg・rsync・ssh を 
   ├─ Discover → ScanAll(Scan) → []Meta  → list
   ├─ Find → ReadTurns → []Turn          → show / outline
   ├─ Candidates(rg) → Search            → search
-  └─ pull → Discover（検索語があれば Candidates）→ ScanAll → fzf → Find → ResumeDir → claude --resume → pick
+  ├─ ParseQuery → collect(rg) → score → decide → find
+  └─ pull → Discover（言葉があれば finder の順位）→ ScanAll → fzf → Find → ResumeDir → claude --resume → pick
 
 push: <config dir>/projects → mirror（ContentToHub）→ rsync → <hub>/<config dir 名>/projects
 pull: <hub>/<config dir 名>/projects → rsync（直近30日）→ mirror → <config dir>/projects（ContentFromHub）
@@ -41,6 +43,11 @@ pull は、ハブの一覧を更新日時つきで取り、手元の mirror よ�
 引数なしの `ccreel` は `pick` と同じ。pull は、ハブが設定されていて `--no-pull` を付けていないときだけ行う。pull に失敗しても、手元のセッションで一覧を出す。
 
 config dir は `--config-dir`、無ければ `CLAUDE_CONFIG_DIR`、それも無ければ `~/.claude` を使う。
+`find` と、ID からセッションを引く `show`・`outline`・`resume` は、`CCREEL_CONFIG_DIRS`（コロン区切り）の config dir も探す。
+
+`find` は、Issue 番号の一致（100）、題の一致（語ごとに30）、本文の当たり行数（語ごとに行数の対数で最大20）、
+全部の語に当たったとき（15）、find を呼んだ場所と同じリポのとき（10）、新しさ（最大5）を足して点にする。1位が2位の1.5倍以上で、かつ20点以上離れていれば
+`decided` にする。番号はツールの出力の数字にも当たり、候補が数百本になることがある。全部を読むと遅いので、rg の当たりで仮の順位を付け、上位40本に絞って読む。
 
 **ターン**は、人の発言1つと、次の発言の前までの応答をまとめた単位である。`show --turns` と `search` の `turn` は、ターンの番号を指す。
 `show` と `search` は既定でツールの入出力を出さない（`--tools` で出す）。上限で止めたときは、その旨を stderr に書き、stdout の JSON Lines には混ぜない。

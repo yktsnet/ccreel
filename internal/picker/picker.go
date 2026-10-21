@@ -56,6 +56,7 @@ func Pick(metas []session.Meta, o Options) (string, error) {
 	preview := fmt.Sprintf("%s show {1} --config-dir %s --last 4 --final --max-chars 800",
 		shellQuote(o.Self), shellQuote(o.ConfigDir))
 	args := []string{
+		// --no-sort で、絞り込んでも渡した順（新しい順か find の順位）を保つ
 		"--delimiter", "\t", "--with-nth", "2..", "--no-sort",
 		"--layout", "reverse", "--height", "100%",
 		"--preview", preview, "--preview-window", "right,55%,wrap",
