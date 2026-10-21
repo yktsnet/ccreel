@@ -52,7 +52,7 @@ testdata/          匿名化した fixture（実際の履歴は入れない）
 
 ## データ設計
 
-- ハブの置き場: `<hub-root>/<config dir 名>/projects/<正規化したプロジェクト名>/<uuid>.jsonl` と付属物
+- ハブの置き場: `<hub-root>/<config dir 名>/projects/<~ に置き換えたプロジェクト名>/<uuid>.jsonl`。付属物は置かない
 - 設定: ハブの宛先・端末名・config dir の一覧を、設定ファイルか環境変数で外から渡す。実値はリポに入れない
 - JSON 出力: `list`・`search`・`show`・`outline` の出力形を固定する。ID は UUID の先頭の数文字でも引ける
 
