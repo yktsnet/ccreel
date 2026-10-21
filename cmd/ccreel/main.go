@@ -28,6 +28,7 @@ Commands:
   list              List sessions, newest first
   show <id>         Print the turns of a session
   outline <id>      Print one line per turn of a session
+  preview <id>      Print a session summary in Markdown (used by the picker)
   find <words>      Rank sessions by #issue, @repo and words; says whether one stands out
   search <query>    Find where a phrase appears across sessions
   push              Send local sessions to the hub (the first push sends all of them)
@@ -51,6 +52,7 @@ func main() {
 		"list":    runList,
 		"show":    runShow,
 		"outline": runOutline,
+		"preview": runPreview,
 		"search":  runSearch,
 		"find":    runFind,
 		"push":    runPush,
@@ -604,6 +606,57 @@ func claudeEnv(configDir string) []string {
 		}
 	}
 	return append(out, "CLAUDE_CONFIG_DIR="+configDir)
+}
+
+// runPreview は picker の右のペインに出す Markdown を書く。上にセッションの素性をまとめ、
+// その下に新しいターンから順に、発言と最終応答を並べる。どこまで進んだかを先に見せるため
+func runPreview(args []string, w, _ io.Writer) error {
+	var c common
+	fs := newFlags("preview", &c)
+	turns := fs.Int("turns", 5, "number of recent turns to show")
+	id, err := parseWithArg(fs, args, "session id")
+	if err != nil {
+		return err
+	}
+	path, _, err := findSession(c.configDir, id)
+	if err != nil {
+		return err
+	}
+	m, err := session.Scan(path)
+	if err != nil {
+		return err
+	}
+	all, err := session.ReadTurns(path)
+	if err != nil {
+		return err
+	}
+	title := m.Title
+	if title == "" {
+		title = oneLine(m.FirstPrompt, 80)
+	}
+	fmt.Fprintf(w, "# %s\n\n", title)
+	var meta []string
+	if m.Repo != "" {
+		meta = append(meta, "`@"+m.Repo+"`")
+	}
+	if m.Issue != "" {
+		meta = append(meta, "`#"+m.Issue+"`")
+	}
+	if m.Branch != "" && m.Branch != "main" && m.Branch != "HEAD" {
+		meta = append(meta, "`"+m.Branch+"`")
+	}
+	meta = append(meta, picker.Ago(m.Updated, time.Now())+" "+m.Updated.Local().Format("15:04"), fmt.Sprintf("%d prompts", m.Prompts))
+	fmt.Fprintf(w, "%s  \n%s\n", strings.Join(meta, " · "), m.CWD)
+	start := max(len(all)-*turns, 0)
+	for i := len(all) - 1; i >= start; i-- {
+		t := all[i]
+		fmt.Fprintf(w, "\n---\n\n**turn %d** · %s %s\n\n> %s\n\n", t.Index, picker.Ago(t.Time, time.Now()), t.Time.Local().Format("15:04"),
+			strings.ReplaceAll(truncate(t.Prompt, 400), "\n", "\n> "))
+		if r := t.FinalText(); r != "" {
+			fmt.Fprintln(w, truncate(r, 1500))
+		}
+	}
+	return nil
 }
 
 // configDirs は primary を先頭に、CCREEL_CONFIG_DIRS の分を重ならないように足す。

@@ -11,7 +11,7 @@ internal/finder/            言葉からセッションを探して順位を付�
 internal/hubsync/           push・pull とハブの古いセッションの削除
   hub.go                      ハブ（host:path か手元のディレクトリ）への rsync と、ハブの側で走らせる sh のスクリプト
   hubsync.go                  Push・Pull。運ぶのはセッション本体の jsonl だけ。手元とハブのあいだに、ハブと同じ形の写し（mirror）を持つ
-internal/picker/            fzf で選ばせる（Pick）・resume の前に移るディレクトリを決める（ResumeDir）・claude を exec する（Resume）
+internal/picker/            fzf で選ばせる（Pick）・一覧の1行と更新日の表示（Line・Ago）・resume の前に移るディレクトリを決める（ResumeDir）・画面を消して claude を exec する（Resume）
 skills/ccreel/SKILL.md      利用者が Claude Code に入れる skill。どの場面でどのサブコマンドを呼ぶかを書く（本文は英語）
 testdata/projects/          架空のセッションで作った fixture。付属物（subagents/）と発言の無いセッションを含む
 .github/workflows/ci.yml    go vet と go test
@@ -39,6 +39,8 @@ push はタイマーから毎分呼ばれる前提で作っている。変わっ
 送れなかった変更は mirror の `.push-pending` に記録しておき、次の push で送り直す。ハブと mirror から更新後40日を過ぎたセッションを消すのは1日に1回で、
 最後に消した時刻を `.last-prune` に残す。push と pull は mirror の `.lock` で排他し、重なったときは待たずに止める。
 pull は、ハブの一覧を更新日時つきで取り、手元の mirror よりハブの方が新しいものだけを rsync する。新しいものが無ければ rsync を起動せず、ssh 1回で終わる。
+
+picker の右のペインには `ccreel preview <id>` が出す Markdown を表示し、bat があれば色を付ける。fzf は全画面で開き、絞り込みは題と `@リポ #番号` の列だけに当てる。
 
 引数なしの `ccreel` は `pick` と同じ。pull は、ハブが設定されていて `--no-pull` を付けていないときだけ行う。pull に失敗しても、手元のセッションで一覧を出す。
 

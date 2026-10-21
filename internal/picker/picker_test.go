@@ -11,16 +11,36 @@ import (
 )
 
 func TestLine(t *testing.T) {
-	m := session.Meta{ID: "11111111-aaaa", Repo: "demo", Issue: "417", FirstPrompt: "fix\nthe  parser", Updated: time.Date(2026, 3, 1, 9, 0, 0, 0, time.Local)}
-	got := Line(m)
-	cols := strings.Split(got, "\t")
-	if len(cols) != 5 || cols[0] != "11111111-aaaa" || cols[1] != "03-01 09:00" || strings.TrimSpace(cols[2]) != "@demo" ||
-		strings.TrimSpace(cols[3]) != "#417" || cols[4] != "fix the parser" {
-		t.Errorf("Line = %q", got)
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.Local)
+	m := session.Meta{ID: "11111111-aaaa", Repo: "demo", Issue: "417", FirstPrompt: "fix\nthe  parser", Updated: now.Add(-time.Hour)}
+	cols := strings.Split(Line(m, now), "\t")
+	// 題を先頭に、@リポ #番号 と日は後ろに薄く出す
+	if len(cols) != 4 || cols[0] != "11111111-aaaa" || cols[1] != "fix the parser" ||
+		cols[2] != dim+"@demo #417"+reset || cols[3] != dim+"TDY"+reset {
+		t.Errorf("Line = %q", cols)
 	}
 	m.Title = "Fix parser"
-	if !strings.HasSuffix(Line(m), "\tFix parser") {
-		t.Errorf("title not preferred: %q", Line(m))
+	if cols := strings.Split(Line(m, now), "\t"); cols[1] != "Fix parser" {
+		t.Errorf("title not preferred: %q", cols)
+	}
+}
+
+func TestAgo(t *testing.T) {
+	now := time.Date(2026, 3, 10, 0, 30, 0, 0, time.Local)
+	cases := []struct {
+		t    time.Time
+		want string
+	}{
+		{now.Add(-20 * time.Minute), "TDY"},
+		// 時間ではなく暦の日で数える。日付をまたいだ1時間前は昨日
+		{now.Add(-time.Hour), "YDY"},
+		{time.Date(2026, 3, 7, 23, 0, 0, 0, time.Local), "3d"},
+		{time.Date(2026, 1, 5, 9, 0, 0, 0, time.Local), "01-05"},
+	}
+	for _, c := range cases {
+		if got := Ago(c.t, now); got != c.want {
+			t.Errorf("Ago(%v) = %q, want %q", c.t, got, c.want)
+		}
 	}
 }
 
