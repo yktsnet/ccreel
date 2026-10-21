@@ -1,7 +1,9 @@
 package session
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -79,6 +81,86 @@ func TestRepoNameAndIssue(t *testing.T) {
 		}
 		if got := issueNumber(c.branch, c.cwd); got != c.issue {
 			t.Errorf("issueNumber(%q, %q) = %q, want %q", c.branch, c.cwd, got, c.issue)
+		}
+	}
+}
+
+// writeSession は架空のセッションを projects/<project>/<id>.jsonl に書き、更新日時を mtime に揃える。
+func writeSession(t *testing.T, dir, project, id string, mtime time.Time, lines ...string) string {
+	t.Helper()
+	p := filepath.Join(dir, "projects", project, id+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(p, mtime, mtime); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func userLine(cwd, ts, text, extra string) string {
+	return `{"type":"user","cwd":"` + cwd + `","timestamp":"` + ts + `",` + extra + `"message":{"role":"user","content":"` + text + `"}}`
+}
+
+func TestScanAllSkipsHeadless(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	writeSession(t, dir, "-src-a", "aaaaaaaa-0000-4000-8000-000000000001", now,
+		userLine("/src/a", "2026-03-01T09:00:00Z", "hello", `"entrypoint":"cli",`))
+	writeSession(t, dir, "-src-a", "aaaaaaaa-0000-4000-8000-000000000002", now,
+		userLine("/src/a", "2026-03-01T09:00:00Z", "Reply with just: smoke", `"entrypoint":"sdk-cli",`))
+	paths, _ := Discover(dir)
+	metas := ScanAll(paths)
+	if len(metas) != 1 || metas[0].ID != "aaaaaaaa-0000-4000-8000-000000000001" {
+		t.Fatalf("got %d sessions, want only the cli one: %+v", len(metas), metas)
+	}
+}
+
+func TestSameUUIDInTwoProjects(t *testing.T) {
+	dir := t.TempDir()
+	id := "bbbbbbbb-0000-4000-8000-000000000001"
+	old := time.Now().Add(-time.Hour)
+	writeSession(t, dir, "-src-a", id, old,
+		userLine("/src/a", "2026-03-01T09:00:00Z", "first", ""))
+	newer := writeSession(t, dir, "-src-a--claude-worktrees-x", id, time.Now(),
+		userLine("/src/a", "2026-03-01T09:00:00Z", "first", ""),
+		userLine("/src/a/.claude/worktrees/x", "2026-03-01T10:00:00Z", "second", ""))
+
+	paths, _ := Discover(dir)
+	metas := ScanAll(paths)
+	if len(metas) != 1 || metas[0].Path != newer {
+		t.Fatalf("ScanAll: got %+v, want one row for %s", metas, newer)
+	}
+	p, err := Find(dir, "bbbb")
+	if err != nil || p != newer {
+		t.Errorf("Find = %q, %v; want %q", p, err, newer)
+	}
+}
+
+func TestRepoComesFromWhereTheSessionStarted(t *testing.T) {
+	dir := t.TempDir()
+	home, _ := os.UserHomeDir()
+	moved := writeSession(t, dir, "-src-work", "cccccccc-0000-4000-8000-000000000001", time.Now(),
+		userLine("/src/work", "2026-03-01T09:00:00Z", "start in work", ""),
+		userLine("/src/dotfiles", "2026-03-01T10:00:00Z", "then cd to dotfiles", ""))
+	fromHome := writeSession(t, dir, "-home", "cccccccc-0000-4000-8000-000000000002", time.Now(),
+		userLine(home, "2026-03-01T09:00:00Z", "start at home", ""),
+		userLine("/src/demo", "2026-03-01T10:00:00Z", "then cd to demo", ""))
+	cases := []struct{ path, repo, cwd string }{
+		{moved, "work", "/src/dotfiles"},
+		// ホームで起動したものは、移った先のリポを使う
+		{fromHome, "demo", "/src/demo"},
+	}
+	for _, c := range cases {
+		m, err := Scan(c.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m.Repo != c.repo || m.CWD != c.cwd {
+			t.Errorf("%s: Repo = %q, CWD = %q; want %q, %q", filepath.Base(c.path), m.Repo, m.CWD, c.repo, c.cwd)
 		}
 	}
 }

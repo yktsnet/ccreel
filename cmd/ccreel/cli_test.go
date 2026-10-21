@@ -77,6 +77,10 @@ func TestResumeUsesTheSessionsConfigDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := strings.Split(strings.TrimSpace(string(b)), "\n")
+	// macOS では一時ディレクトリが /private の下へのリンクで、pwd はリンクを解いた形を返す
+	if r, err := filepath.EvalSymlinks(cwd); err == nil {
+		cwd = r
+	}
 	want := []string{cwd, work, "--resume " + otherID}
 	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
 		t.Errorf("claude saw %q, want %q", got, want)
@@ -235,5 +239,78 @@ func TestPreviewIsNewestFirstMarkdown(t *testing.T) {
 	// 新しいターンを先に出す
 	if strings.Index(got, "**turn 2**") > strings.Index(got, "**turn 1**") {
 		t.Errorf("turns are not newest first:\n%s", got)
+	}
+}
+
+func TestPickListsEveryConfigDir(t *testing.T) {
+	work, _ := secondConfigDir(t)
+	bin := t.TempDir()
+	got := filepath.Join(bin, "lines")
+	script := "#!/bin/sh\ncat > " + got + "\nexit 130\n"
+	if err := os.WriteFile(filepath.Join(bin, "fzf"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	t.Setenv("CCREEL_CONFIG_DIRS", "../../testdata:"+work)
+	t.Setenv("CCREEL_HUB", "")
+
+	var errw bytes.Buffer
+	if err := runPick([]string{"--no-pull"}, &errw, &errw); err != nil && !strings.Contains(err.Error(), "cancelled") {
+		t.Fatalf("pick: %v %s", err, errw.String())
+	}
+	b, err := os.ReadFile(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"11111111-1111-4111-8111-111111111111", otherID} {
+		if !strings.Contains(string(b), id+"\t") {
+			t.Errorf("pick lines lack %s:\n%s", id, b)
+		}
+	}
+}
+
+// 2本を選ぶと、2本目はそのセッションの config dir で tmux の新しいウィンドウに開き、1本目はこのプロセスで開く
+func TestPickOpensExtraSelectionsInTmux(t *testing.T) {
+	work, _ := secondConfigDir(t)
+	bin := t.TempDir()
+	log := filepath.Join(bin, "log")
+	fzf := "#!/bin/sh\ngrep -e '^11111111' -e '^" + otherID[:8] + "'\n"
+	tmux := "#!/bin/sh\necho \"tmux $*\" >> " + log + "\n"
+	claude := "#!/bin/sh\necho \"claude $*\" >> " + log + "\n"
+	for name, s := range map[string]string{"fzf": fzf, "tmux": tmux, "fake-claude": claude} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(s), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fixture, _ := filepath.Abs("../../testdata")
+	cmd := exec.Command(os.Args[0])
+	cmd.Env = append(os.Environ(),
+		"PATH="+bin+":"+os.Getenv("PATH"),
+		"TMUX=/tmp/fake,1,0",
+		"CCREEL_HUB=",
+		"CCREEL_TEST_MAIN=1",
+		"CCREEL_TEST_ARGS=pick --no-pull",
+		"CCREEL_CLAUDE="+filepath.Join(bin, "fake-claude"),
+		"CLAUDE_CONFIG_DIR="+fixture,
+		"CCREEL_CONFIG_DIRS="+fixture+":"+work,
+	)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("pick: %v\n%s", err, b)
+	}
+	b, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	// 一覧は新しい順なので、fixture の 11111111 より新しい work の側が1本目になる
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "tmux new-window -d -c ") || !strings.HasPrefix(lines[1], "claude --resume ") {
+		t.Fatalf("got %q, want one tmux new-window then one claude", lines)
+	}
+	if !strings.Contains(lines[0], "--resume 11111111-1111-4111-8111-111111111111") || !strings.Contains(lines[0], "-e CLAUDE_CONFIG_DIR="+fixture) {
+		t.Errorf("tmux line %q should resume 11111111 with the fixture config dir", lines[0])
+	}
+	if lines[1] != "claude --resume "+otherID {
+		t.Errorf("claude line %q, want --resume %s", lines[1], otherID)
 	}
 }
