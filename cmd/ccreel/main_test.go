@@ -115,14 +115,15 @@ func TestListSkipsCurrentSession(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "22222222-2222-4222-8222-222222222222")
 	var out bytes.Buffer
-	if err := runList(nil, &out, &out); err != nil {
+	// 22222222 は発言が1回なので、--all を付けて出るようにしておく
+	if err := runList([]string{"--all"}, &out, &out); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(out.String(), "22222222") || !strings.Contains(out.String(), "11111111") {
 		t.Errorf("default list = %q", out.String())
 	}
 	out.Reset()
-	if err := runList([]string{"--include-current"}, &out, &out); err != nil {
+	if err := runList([]string{"--all", "--include-current"}, &out, &out); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "22222222") {
@@ -153,5 +154,25 @@ func TestListIssue(t *testing.T) {
 		if got := strings.Contains(out.String(), `"issue":"12"`); got != want {
 			t.Errorf("--issue %s: got %q", issue, out.String())
 		}
+	}
+}
+
+func TestListHidesSinglePromptSessions(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	var out bytes.Buffer
+	if err := runList(nil, &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	// 22222222 は発言が1回、11111111 は2回
+	if strings.Contains(out.String(), "22222222") || !strings.Contains(out.String(), "11111111") {
+		t.Errorf("default list = %q, want 11111111 only", out.String())
+	}
+	out.Reset()
+	if err := runList([]string{"--all"}, &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "22222222") {
+		t.Errorf("--all list = %q, want 22222222 too", out.String())
 	}
 }

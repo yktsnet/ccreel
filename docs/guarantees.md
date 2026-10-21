@@ -13,6 +13,7 @@
 - `list` は、`CLAUDE_CODE_SESSION_ID` のセッション（呼んでいる Claude Code 自身）を外す。`--include-current` で戻す
 - `list --repo` はリポ名の完全一致で絞る
 - `list --issue` は `12` と `#12` のどちらでも、その Issue 番号のセッションだけに絞る。JSON に `issue` を出す
+- `list` は、発言が1回のセッションを既定で外し、`--all` で出す
 
 | 保証（要約） | 対応テスト |
 |---|---|
@@ -25,6 +26,7 @@
 | いまのセッションを外す | `TestListSkipsCurrentSession` |
 | `--repo` は完全一致 | `TestListRepoIsExact` |
 | `--issue` で絞る | `TestListIssue` |
+| 発言が1回のセッションを外す | `TestListHidesSinglePromptSessions` |
 
 *（この節には複数のサブコマンドが混在するので、行ごとに主語を明示している）*
 

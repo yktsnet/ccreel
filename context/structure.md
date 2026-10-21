@@ -48,6 +48,7 @@ pull は、ハブが設定されていて `--no-pull` を付けていないと�
 fzf では Tab で複数を選べる。1本目はいまのペインで、2本目からは tmux の新しいウィンドウで resume する。tmux の外では1本目だけを開く。
 
 一覧には、`claude -p` で動かしたセッション（jsonl の `entrypoint` が `sdk-cli`）を出さない。
+`list` と `pick` は、発言が1回のセッションも既定で外し、`--all` で出す。言葉で探す `find` と `search` は外さない。
 リポは起動した場所の cwd から決める。ホームで起動したセッションだけは、最後の cwd から決める。resume で移る先は最後の cwd である。
 
 config dir は `--config-dir`、無ければ `CLAUDE_CONFIG_DIR`、それも無ければ `~/.claude` を使う。
