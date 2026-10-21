@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yktsnet/ccreel/internal/hubsync"
 	"github.com/yktsnet/ccreel/internal/session"
 )
 
@@ -21,8 +22,11 @@ Commands:
   show <id>         Print the turns of a session
   outline <id>      Print one line per turn of a session
   search <query>    Find where a phrase appears across sessions
+  push              Send local sessions to the hub (the first push sends all of them)
+  pull              Fetch recent sessions from the hub into the local config dir
 
 <id> may be any unique prefix of the session UUID.
+The hub is an rsync destination such as host:path, given by --hub or CCREEL_HUB.
 Run 'ccreel <command> -h' for flags.
 `
 
@@ -36,6 +40,8 @@ func main() {
 		"show":    runShow,
 		"outline": runOutline,
 		"search":  runSearch,
+		"push":    runPush,
+		"pull":    runPull,
 	}
 	name := os.Args[1]
 	if name == "-h" || name == "--help" || name == "help" {
@@ -368,6 +374,71 @@ func runSearch(args []string, w, errw io.Writer) error {
 	if *limit > 0 && len(hits) >= *limit {
 		fmt.Fprintf(errw, "ccreel: stopped at --limit %d; narrow with --since/--repo or raise --limit\n", *limit)
 	}
+	return nil
+}
+
+func syncFlags(name string) (*flag.FlagSet, func() (hubsync.Options, error)) {
+	var c common
+	fs := newFlags(name, &c)
+	hub := fs.String("hub", os.Getenv("CCREEL_HUB"), "rsync destination of the hub, e.g. host:path")
+	mirror := fs.String("mirror", "", "local copy in hub form (default: $XDG_CACHE_HOME/ccreel/<config dir name>)")
+	pullDays := fs.Int("pull-days", 30, "pull sessions updated within this many days")
+	keepDays := fs.Int("keep-days", 40, "delete sessions older than this from the hub and the mirror")
+	return fs, func() (hubsync.Options, error) {
+		h, err := hubsync.ParseHub(*hub)
+		if err != nil {
+			return hubsync.Options{}, err
+		}
+		if *keepDays <= *pullDays {
+			return hubsync.Options{}, fmt.Errorf("--keep-days (%d) must be greater than --pull-days (%d)", *keepDays, *pullDays)
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return hubsync.Options{}, err
+		}
+		m := *mirror
+		if m == "" {
+			cache, err := os.UserCacheDir()
+			if err != nil {
+				return hubsync.Options{}, err
+			}
+			m = filepath.Join(cache, "ccreel", filepath.Base(filepath.Clean(c.configDir)))
+		}
+		return hubsync.Options{ConfigDir: c.configDir, Home: home, Mirror: m, Hub: h, PullDays: *pullDays, KeepDays: *keepDays}, nil
+	}
+}
+
+func runPush(args []string, w, _ io.Writer) error {
+	fs, opts := syncFlags("push")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	o, err := opts()
+	if err != nil {
+		return err
+	}
+	st, err := hubsync.Push(o)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "pushed to %s (%d files updated)\n", o.Hub, st.Staged)
+	return nil
+}
+
+func runPull(args []string, w, _ io.Writer) error {
+	fs, opts := syncFlags("pull")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	o, err := opts()
+	if err != nil {
+		return err
+	}
+	st, err := hubsync.Pull(o)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "pulled from %s (%d files updated)\n", o.Hub, st.Materialize)
 	return nil
 }
 

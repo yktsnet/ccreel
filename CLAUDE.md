@@ -23,6 +23,8 @@ go run ./cmd/ccreel list --config-dir testdata    # fixture に対して動か�
 
 `go vet ./...` と `go test ./...`。CI も同じ2つを回す。
 
+`internal/hubsync` のテストは、手元の一時ディレクトリをハブにして rsync を実際に走らせる。ssh は使わない。
+
 読み出しの変更は `testdata/` の fixture で確かめる。fixture は架空のセッションで作り、
 実際の履歴（`~/.claude*/projects` の中身）を写さない。実際の履歴に対して動かすのは、
 所要時間や件数を見るときだけにし、出力をリポに残さない。

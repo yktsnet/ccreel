@@ -43,7 +43,7 @@ Claude Code のセッション履歴を複数の端末で VPS 経由で共有し
 ```
 cmd/ccreel/        エントリポイントとサブコマンドの振り分け
 internal/session/  jsonl の読み出し（一覧の行・本文・目次・検索の該当箇所）
-internal/sync/     push・pull・バックフィル（rsync を外部コマンドとして呼ぶ）
+internal/hubsync/  push・pull・ハブの古いセッションの削除（rsync と ssh を外部コマンドとして呼ぶ）
 internal/pathmap/  プロジェクト名と cwd の書き換え
 internal/picker/   fzf の起動とプレビュー
 skills/ccreel/     同梱の Claude Code skill
@@ -60,9 +60,8 @@ testdata/          匿名化した fixture（実際の履歴は入れない）
 
 ```
 ccreel                      # pull してから fzf を開く。Enter で cwd へ移って claude --resume
-ccreel push                 # 手元の新しいセッションをハブへ
+ccreel push                 # 手元の新しいセッションをハブへ送る。初回は手元の履歴を全部送る
 ccreel pull
-ccreel backfill             # 初回: 手元の履歴を全部ハブへ入れる
 ccreel list --since 1d --repo ccreel --json
 ccreel search "fzf preview" --json --limit 20
 ccreel show 1c0e662e --last 3 --no-tools --json
@@ -79,7 +78,7 @@ ccreel outline 1c0e662e --json
 | 3 | 読み出しの中核と `list`・`show`・`outline` の JSON | 2 | fixture に対する出力がテストで固定される |
 | 4 | `search`（`rg -l` → 該当箇所と前後の文脈） | 3 | 件数と文字数の上限、切り詰めの表示がある |
 | 5 | パスの書き換え | 2 | 端末の形と `~` の形の相互変換（プロジェクト名と cwd）がテストで固定される |
-| 6 | push・pull・backfill・ハブの掃除 | 5 | 2台と2つの config dir で push と pull を往復させ、同じセッションが重複せず1本になる。ハブから40日より古いものが消える |
+| 6 | push・pull・ハブの古いセッションの削除 | 5 | 2台と2つの config dir で push と pull を往復させ、同じセッションが重複せず1本になる。ハブから40日より古いものが消える |
 | 7 | fzf の画面と resume | 3, 6 | 別の端末で始めたセッションを選んで続けられる |
 | 8 | 同梱の skill | 4 | DoD の3つの用途を skill 経由でこなせる |
 | 9 | dotfiles 側の配線（flake input・`c` の差し替え・push のきっかけ・ctx と ctx-history-search の撤去） | 7, 8 | 1日使える |
