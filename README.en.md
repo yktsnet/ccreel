@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml)
 
-A CLI that gathers Claude Code session history from multiple machines into a hub.
+A CLI for people who use Claude Code on more than one machine. It gathers session history into a hub, a store reachable over ssh, so you can find and resume any session from any machine.
 The same search serves two cases: you browsing with fzf to find and resume a session quickly, and Claude Code pulling up the right conversation when you ask it to.
 On a single machine, it still works as a list you can narrow with `@repo` and `#issue`, and Claude Code can read your history through it.
 
@@ -71,7 +71,8 @@ flowchart LR
   ca -.->|push| hub -.->|pull| fb
 ```
 
-On the hub, the home prefix in project names and in `"cwd"` is replaced with `~`. Whether sent from `/Users/alice` on macOS or `/home/alice` on Linux, the same session becomes the same bytes, and the pulling machine maps it back to its own home.
+Syncing `projects/` as is does not make a session the same on machines whose home paths differ, because project names and `"cwd"` contain the home path.
+On the ccreel hub, the home prefix in project names and in `"cwd"` is replaced with `~`. Whether sent from `/Users/alice` on macOS or `/home/alice` on Linux, the same session becomes the same bytes, and the pulling machine maps it back to its own home.
 
 How it works is in [docs/sync.md](docs/sync.md) (Japanese).
 
