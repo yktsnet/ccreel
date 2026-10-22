@@ -59,7 +59,7 @@ func (h Hub) sh(script string, stdin io.Reader) ([]byte, error) {
 	if h.Host == "" {
 		cmd = exec.Command("sh", "-c", script)
 	} else {
-		cmd = exec.Command("ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes", h.Host, script)
+		cmd = exec.Command("ssh", append(append([]string{}, sshOpts...), h.Host, script)...)
 	}
 	var stderr bytes.Buffer
 	cmd.Stdin = stdin
@@ -130,10 +130,18 @@ find . -mindepth 1 -maxdepth 1 -type d -empty -exec rmdir {} +`, h.dir(configNam
 	return err
 }
 
+// sshOpts は ~/.ssh/config の多重化を使わず、応答の止まった接続を切る。ConnectTimeout は新しくつなぐときにしか
+// 効かないので、固まった ControlMaster を通すと pull がいつまでも返らず、pick が fzf を開けない。
+var sshOpts = []string{
+	"-o", "ConnectTimeout=5", "-o", "BatchMode=yes", "-o", "ControlPath=none",
+	"-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3",
+}
+
 func rsyncArgs(h Hub) []string {
 	args := []string{"-a", "--update"}
 	if h.Host != "" {
-		args = append(args, "-e", "ssh -o ConnectTimeout=5 -o BatchMode=yes")
+		// --timeout は転送が止まったときだけ切る。初回の大きな転送は時間がかかっても切らない
+		args = append(args, "--timeout=30", "-e", "ssh "+strings.Join(sshOpts, " "))
 	}
 	return args
 }

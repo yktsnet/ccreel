@@ -70,6 +70,7 @@
 - `Push` は、ハブと mirror の古いものを消す処理を1日に1回だけ行う
 - `Force` を付けた `Push` は、変わったものが無くても送る
 - 同じ mirror を別の `Push` か `Pull` が使っているあいだは、待たずに `ErrBusy` を返す
+- `Push` と `Pull` は、ssh の先のハブに `~/.ssh/config` の多重化を使わずにつなぎ、応答の止まった接続と転送を時間で切る
 - `ParseHub` は、最初の `/` より前に `:` があれば `host:path`（ssh の先）、それ以外は手元のディレクトリとして読み、空の指定はエラーにする
 
 | 保証（要約） | 対応テスト |
@@ -86,6 +87,7 @@
 | 削除は1日1回 | `TestPushOnlyWhenChanged` |
 | `Force` | `TestPushOnlyWhenChanged` |
 | 重なったら `ErrBusy` | `TestLockedMirror` |
+| 止まった接続を待ち続けない | `TestRemoteHubDoesNotWaitForever` |
 | ハブの指定の読み方 | `TestParseHub` |
 
 *（この節には `Push`・`Pull`・`ParseHub` が混在するので、行ごとに主語を明示している）*
