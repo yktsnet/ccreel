@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml)
 
-Claude Code のセッション履歴を複数の端末からハブに集める CLI。
+Claude Code を複数の端末で使う人のための CLI。セッション履歴を ssh でつながる置き場（ハブ）に集め、どの端末からでも探して resume できる。
 人が fzf で手早く探して resume する場面と、Claude Code に頼んで正しい会話をすぐ引かせる場面の両方に、同じ検索を使う。
 端末が1台でも、`@リポ`・`#Issue番号` で絞れる一覧として使え、Claude Code からも履歴を読める。
 
@@ -71,7 +71,8 @@ flowchart LR
   ca -.->|push| hub -.->|pull| fb
 ```
 
-ハブでは、プロジェクト名と `"cwd"` の先頭のホームを `~` に置き換えて持つ。macOS の `/Users/alice` と Linux の `/home/alice` のどちらから送っても同じセッションは同じバイト列になり、pull した端末では自分のホームへ戻す。
+`projects/` をそのまま同期するだけでは、ホームのパスが違う端末どうしで同じセッションとして扱えない。プロジェクト名と `"cwd"` にホームのパスが入っているためである。
+ccreel のハブでは、プロジェクト名と `"cwd"` の先頭のホームを `~` に置き換えて持つ。macOS の `/Users/alice` と Linux の `/home/alice` のどちらから送っても同じセッションは同じバイト列になり、pull した端末では自分のホームへ戻す。
 
 仕組みは [docs/sync.md](docs/sync.md) にある。
 
