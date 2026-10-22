@@ -277,6 +277,19 @@ func TestParseHub(t *testing.T) {
 	}
 }
 
+func TestRemoteHubDoesNotWaitForever(t *testing.T) {
+	sh := strings.Join(sshOpts, " ")
+	for _, want := range []string{"ControlPath=none", "ServerAliveInterval=", "ConnectTimeout="} {
+		if !strings.Contains(sh, want) {
+			t.Errorf("sshOpts = %q, missing %s", sh, want)
+		}
+	}
+	args := strings.Join(rsyncArgs(Hub{Host: "vps", Root: "hub"}), " ")
+	if !strings.Contains(args, "--timeout=") || !strings.Contains(args, "ssh "+sh) {
+		t.Errorf("rsyncArgs = %q", args)
+	}
+}
+
 func TestIsSessionFile(t *testing.T) {
 	for rel, want := range map[string]bool{
 		"~-src/" + idA + ".jsonl":             true,

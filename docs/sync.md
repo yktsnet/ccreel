@@ -27,6 +27,17 @@ push は config dir を1つずつ送る。config dir が複数あるなら、`--
 pull は、ハブの一覧を更新日時つきで取り、mirror より新しいものだけを rsync する。新しいものが無ければ ssh 1回で終わる。
 `ccreel`（pick）は、`CCREEL_CONFIG_DIRS` に並べた config dir ごとに pull してから fzf を開く。pull に失敗しても、手元のセッションで一覧を出す。
 
+開くときの待ちをなくすには、push と同じタイマーで pull も呼び、`ccreel --no-pull` で開く。別の端末の最新は、タイマーの間隔の分だけ遅れて届く。
+
+```cron
+* * * * * CCREEL_HUB=<hub-host>:ccreel-hub ccreel push; CCREEL_HUB=<hub-host>:ccreel-hub ccreel pull
+```
+
+## ssh の接続
+
+ssh は `~/.ssh/config` の多重化（`ControlMaster`）を使わず、毎回つなぎ直す。`ConnectTimeout` は新しくつなぐときにしか効かないので、固まった多重化の接続を通すと pull がいつまでも返らない。
+つないだあとに応答が止まったら、ssh の `ServerAliveInterval` と rsync の `--timeout` で切る。初回の大きな転送のように、時間がかかっても進んでいるものは切らない。
+
 ## 保持期間
 
 - pull は、ハブでの更新から30日以内のセッションだけを取る（Claude Code の保持期間に合わせた）。全部を取ると、手元で消えたセッションが pull のたびに戻ってくる
