@@ -15,8 +15,8 @@ func TestLine(t *testing.T) {
 	m := session.Meta{ID: "11111111-aaaa", Repo: "demo", Issue: "417", FirstPrompt: "fix\nthe  parser", Updated: now.Add(-time.Hour)}
 	cols := strings.Split(Line(m, now), "\t")
 	// 題を先頭に、@リポ #番号 と日は後ろに薄く出す
-	if len(cols) != 4 || cols[0] != "11111111-aaaa" || cols[1] != "fix the parser" ||
-		cols[2] != dim+"@demo #417"+reset || cols[3] != dim+"*0"+reset {
+	if len(cols) != 5 || cols[0] != "11111111-aaaa" || cols[1] != "fix the parser" ||
+		cols[2] != dim+"@demo #417"+reset || cols[3] != dim+"*0"+reset || cols[4] != dim+"1h"+reset {
 		t.Errorf("Line = %q", cols)
 	}
 	m.Title = "Fix parser"
@@ -45,6 +45,28 @@ func TestAgo(t *testing.T) {
 	for _, c := range cases {
 		if got := Ago(c.t, now); got != c.want {
 			t.Errorf("Ago(%v) = %q, want %q", c.t, got, c.want)
+		}
+	}
+}
+
+func TestElapsed(t *testing.T) {
+	now := time.Date(2026, 3, 10, 15, 0, 0, 0, time.Local)
+	cases := []struct {
+		t    time.Time
+		want string
+	}{
+		{now.Add(-30 * time.Second), "now"},
+		{now.Add(-12 * time.Minute), "12m"},
+		{now.Add(-59 * time.Minute), "59m"},
+		{now.Add(-3*time.Hour - 40*time.Minute), "3h"},
+		// 時計のずれで未来の時刻が来ても今日の now にする
+		{now.Add(time.Minute), "now"},
+		// 今日でなければ出さない
+		{time.Date(2026, 3, 9, 23, 50, 0, 0, time.Local), ""},
+	}
+	for _, c := range cases {
+		if got := Elapsed(c.t, now); got != c.want {
+			t.Errorf("Elapsed(%v) = %q, want %q", c.t, got, c.want)
 		}
 	}
 }

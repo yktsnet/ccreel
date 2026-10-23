@@ -11,7 +11,7 @@ internal/finder/            言葉からセッションを探して順位を付�
 internal/hubsync/           push・pull とハブの古いセッションの削除
   hub.go                      ハブ（host:path か手元のディレクトリ）への rsync と、ハブの側で走らせる sh のスクリプト
   hubsync.go                  Push・Pull。運ぶのはセッション本体の jsonl だけ。手元とハブのあいだに、ハブと同じ形の写し（mirror）を持つ
-internal/picker/            fzf で選ばせる（Pick）・一覧の1行と更新日の表示（Line・Ago）・resume の前に移るディレクトリを決める（ResumeDir）・画面を消して claude を exec する（Resume）・tmux の新しいウィンドウで claude を開く（OpenWindow）
+internal/picker/            fzf で選ばせる（Pick）・一覧の1行と更新日・経過時間の表示（Line・Ago・Elapsed）・resume の前に移るディレクトリを決める（ResumeDir）・画面を消して claude を exec する（Resume）・tmux の新しいウィンドウで claude を開く（OpenWindow）
 skills/ccreel/SKILL.md      利用者が Claude Code に入れる skill。どの場面でどのサブコマンドを呼ぶかを書く（本文は英語）
 testdata/projects/          架空のセッションで作った fixture。付属物（subagents/）と発言の無いセッションを含む
 demo/                       README の GIF（demo.tape で撮る）。gensessions が架空のセッションを書き、claude の代わりに demo/claude を起動する
@@ -43,6 +43,7 @@ push はタイマーから毎分呼ばれる前提で作っている。変わっ
 pull は、ハブの一覧を更新日時つきで取り、手元の mirror よりハブの方が新しいものだけを rsync する。新しいものが無ければ rsync を起動せず、ssh 1回で終わる。
 
 picker の右のペインには `ccreel preview <id>` が出す Markdown を表示し、bat があれば色を付ける。fzf は全画面で開く。更新日は9日前まで `*0`（今日）・`*1`（昨日）の形で出す。`@リポ`・`#番号` と同じく、この形を入力して一覧を絞り込める。
+今日の分には `*0 12m` のように経過時間（1分未満は `now`、60分以上は `3h`）を添える。経過時間の列は fzf の `--nth` で絞り込みの対象から外す。
 
 引数なしの `ccreel` は `pick` と同じ。pick は `CCREEL_CONFIG_DIRS` の config dir をまとめて一覧に出し、config dir ごとに pull する。
 pull は、ハブが設定されていて `--no-pull` を付けていないときだけ行う。pull に失敗しても、手元のセッションで一覧を出す。
