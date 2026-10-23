@@ -20,7 +20,7 @@ const (
 	reset = "\x1b[0m"
 )
 
-// Line は fzf に渡す1行で、列は「UUID・題・@リポ #番号・いつ」。UUID は画面に出さず、選ばれた行から ID を取り出すのに使う。
+// Line は fzf に渡す1行で、列は「UUID・題・@リポ #番号・いつ・今日の経過」。UUID は画面に出さず、選ばれた行から ID を取り出すのに使う。
 // 狭いペインでもまず題が見えるよう題を先頭に置き、リポと日時は後ろに薄く出す。
 // fzf の中で @リポ・#番号 と打てば、その語にだけ当たる。題の中の同じ言葉と混ざらない
 func Line(m session.Meta, now time.Time) string {
@@ -36,7 +36,7 @@ func Line(m session.Meta, now time.Time) string {
 	if m.Issue != "" {
 		tags = append(tags, "#"+m.Issue)
 	}
-	return fmt.Sprintf("%s\t%s\t%s%s%s\t%s%s%s", m.ID, title, dim, strings.Join(tags, " "), reset, dim, Ago(m.Updated, now), reset)
+	return fmt.Sprintf("%s\t%s\t%s%s%s\t%s%s%s\t%s%s%s", m.ID, title, dim, strings.Join(tags, " "), reset, dim, Ago(m.Updated, now), reset, dim, Elapsed(m.Updated, now), reset)
 }
 
 // Ago は一覧に出す日の目安。探すときに要るのは日付そのものより「今日か昨日か、何日前か」なので、
@@ -50,6 +50,22 @@ func Ago(t, now time.Time) string {
 		return fmt.Sprintf("*%d", days)
 	}
 	return fmt.Sprintf("%dw", days/7)
+}
+
+// Elapsed は今日（*0）の分にだけ添える経過時間で、1分未満は now、60分未満は分（12m）、それ以上は時間（3h）で返す。
+// 今日の中で並ぶ順の見当と、別のペインや端末でいま開いているかもしれないことが分かれば足りるので、分と時間を組み合わせない
+func Elapsed(t, now time.Time) string {
+	if Ago(t, now) != "*0" {
+		return ""
+	}
+	d := now.Sub(t)
+	switch {
+	case d < time.Minute:
+		return "now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d/time.Minute))
+	}
+	return fmt.Sprintf("%dh", int(d/time.Hour))
 }
 
 type Options struct {
@@ -80,7 +96,8 @@ func Pick(metas []session.Meta, o Options) ([]string, error) {
 	}
 	args := []string{
 		// --no-sort で、絞り込んでも渡した順（新しい順か find の順位）を保つ。
-		"--delimiter", "\t", "--with-nth", "2..", "--no-sort", "--ansi", "--tabstop", "2", "--multi",
+		// 経過時間（--with-nth 後の4列目）は --nth で絞り込みから外す。数字が当たると *1 や 12 が今日の行にも当たる
+		"--delimiter", "\t", "--with-nth", "2..", "--nth", "1..3", "--no-sort", "--ansi", "--tabstop", "2", "--multi",
 		// 全画面で開く。--height の表示は閉じたあとも描いたものが残り、resume した claude の画面と重なる
 		"--layout", "reverse", "--no-height",
 		// 幅が足りない端末では、題を切らないようにプレビューを下へ回す。fzf の <N は端末ではなくプレビュー欄の幅で比べる
