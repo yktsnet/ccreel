@@ -121,6 +121,8 @@ ccreel search "締め処理" --json
 
 fzf の操作・JSON の項目・環境変数・フラグは [docs/usage.md](docs/usage.md) にある。
 
+`list --json` と `show --json` を読めば、ほかの道具からもセッションを扱える。たとえば [codeview](https://github.com/yktsnet/codeview#extensions) には、セッションの一覧と本文を、コードや Issue と同じサイトのページにする拡張の例がある。
+
 ## Design Decisions
 
 - **セッションをファイル単位の rsync `--update` で合わせる**: jsonl は追記しかされず、1本は1台の端末でしか書かれないので、新しい方を残すだけで衝突しない
