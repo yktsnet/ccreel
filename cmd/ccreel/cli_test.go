@@ -48,6 +48,14 @@ func TestMain(m *testing.M) {
 		main()
 		os.Exit(0)
 	}
+	// 手元の設定（実際の config dir やハブ、いまの Claude Code のセッション）を読ませない。
+	// 要るテストは t.Setenv で自分で立てる
+	for _, k := range []string{
+		"CCREEL_CLAUDE", "CCREEL_CONFIG_DIRS", "CCREEL_FZF_OPTS", "CCREEL_HUB",
+		"CLAUDE_CODE_SESSION_ID", "CLAUDE_CONFIG_DIR", "TMUX",
+	} {
+		os.Unsetenv(k)
+	}
 	os.Exit(m.Run())
 }
 
