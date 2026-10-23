@@ -261,8 +261,9 @@ func between(s, open, close string) string {
 	return strings.TrimSpace(s[:j])
 }
 
-// worktree の中で起動したセッションも、元のリポの名前で一覧に出す。
-// cwd が worktree の置き場そのもの（.../.claude/worktrees）のこともある。相手の端末にしか無い worktree を
+// worktree の中で起動したセッションも、元のリポの名前で一覧に出す。worktree の置き場は、
+// リポの中の .claude/worktrees/<名前> と、リポの隣の <リポ>.wt/<名前> の2つの形を扱う。
+// cwd が置き場そのもの（.../.claude/worktrees や .../<リポ>.wt）のこともある。相手の端末にしか無い worktree を
 // 手元にある祖先へ書き換えた記録がこの形になる。
 func repoName(cwd string) string {
 	if cwd == "" {
@@ -272,7 +273,27 @@ func repoName(cwd string) string {
 	if i := strings.Index(cwd+"/", wt+"/"); i >= 0 {
 		cwd = cwd[:i]
 	}
+	if dir, _, ok := siblingWorktree(cwd); ok {
+		return strings.TrimSuffix(filepath.Base(dir), siblingSuffix)
+	}
 	return filepath.Base(cwd)
+}
+
+const siblingSuffix = ".wt"
+
+// siblingWorktree は cwd が <リポ>.wt か <リポ>.wt/<名前>（その下も含む）にあるとき、
+// <リポ>.wt のパスと worktree の名前を返す。
+func siblingWorktree(cwd string) (dir, name string, ok bool) {
+	parts := strings.Split(filepath.Clean(cwd), "/")
+	for i, p := range parts {
+		if strings.HasSuffix(p, siblingSuffix) && len(p) > len(siblingSuffix) {
+			if i+1 < len(parts) {
+				name = parts[i+1]
+			}
+			return strings.Join(parts[:i+1], "/"), name, true
+		}
+	}
+	return "", "", false
 }
 
 // リポは起動した場所で決める。途中で別のリポへ cd しても、会話の主題は起動したリポにある。
@@ -294,6 +315,11 @@ func issueNumber(branch, cwd string) string {
 		return m[1]
 	}
 	if _, wt, ok := strings.Cut(cwd, "/.claude/worktrees/"); ok {
+		if m := issueRe.FindStringSubmatch(wt); m != nil {
+			return m[1]
+		}
+	}
+	if _, wt, ok := siblingWorktree(cwd); ok {
 		if m := issueRe.FindStringSubmatch(wt); m != nil {
 			return m[1]
 		}

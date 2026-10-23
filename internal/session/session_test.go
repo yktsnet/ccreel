@@ -73,6 +73,13 @@ func TestRepoNameAndIssue(t *testing.T) {
 		{"feat/picker", "/home/a/src/ccreel/.claude/worktrees/882-manual-run", "ccreel", "882"},
 		{"day/2026-10-08-accdb-extract", "/home/a/src/invoice", "invoice", ""},
 		{"main", "/home/a/src/demo", "demo", ""},
+		// リポの隣の <リポ>.wt/<名前> に作る worktree
+		{"claude/61-works-tag", "/home/a/src/site.wt/61-works-tag", "site", "61"},
+		{"", "/home/a/src/site.wt/61-works-tag/web", "site", "61"},
+		{"", "/home/a/src/site.wt", "site", ""},
+		// .wt だけの名前や、途中に .wt を含むだけの名前はそのまま
+		{"main", "/home/a/src/.wt", ".wt", ""},
+		{"main", "/home/a/src/my.wtf", "my.wtf", ""},
 		{"", "", "", ""},
 	}
 	for _, c := range cases {
