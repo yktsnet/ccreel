@@ -121,6 +121,8 @@ ccreel search "month-close" --json
 
 fzf keys, JSON fields, environment variables, and flags are in [docs/usage.md](docs/usage.md) (Japanese).
 
+Other tools can work with sessions by reading `list --json` and `show --json`. For example, [codeview](https://github.com/yktsnet/codeview#extensions) ships an example extension that turns the session list and each session into pages on the same site as your code and issues.
+
 ## Design Decisions
 
 - **Sync sessions per file with rsync `--update`**: a jsonl is append-only and written by only one machine, so keeping the newer one never conflicts
