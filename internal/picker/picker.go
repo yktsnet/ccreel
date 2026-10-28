@@ -20,7 +20,7 @@ const (
 	reset = "\x1b[0m"
 )
 
-// Line は fzf に渡す1行で、列は「UUID・題・@リポ #番号・いつ・今日の経過」。UUID は画面に出さず、選ばれた行から ID を取り出すのに使う。
+// Line は fzf に渡す1行で、列は「UUID・題・@リポ #番号・いつ・24時間以内の経過」。UUID は画面に出さず、選ばれた行から ID を取り出すのに使う。
 // 狭いペインでもまず題が見えるよう題を先頭に置き、リポと日時は後ろに薄く出す。
 // fzf の中で @リポ・#番号 と打てば、その語にだけ当たる。題の中の同じ言葉と混ざらない
 func Line(m session.Meta, now time.Time) string {
@@ -39,21 +39,20 @@ func Line(m session.Meta, now time.Time) string {
 	return fmt.Sprintf("%s\t%s\t%s%s%s\t%s%s%s\t%s%s%s", m.ID, title, dim, strings.Join(tags, " "), reset, dim, Ago(m.Updated, now), reset, dim, Elapsed(m.Updated, now), reset)
 }
 
-// Ago は一覧に出す日の目安。探すときに要るのは日付そのものより「今日か昨日か、何日前か」なので、
-// 時刻ではなく手元の暦の日で数える。9日前までは * に続けて日数（今日は *0、昨日は *1）、それより前は週（2w）で返す。
+// Ago は一覧に出す日の目安で、更新からの経過時間を24時間ごとに数える。
+// 暦の日で数えると、深夜0時をまたいで終えた作業が *0 と *1 に割れ、昨夜の作業をまとめて探せない。
+// 9日前までは * に続けて日数（24時間以内は *0、24〜48時間前は *1）、それより前は週（2w）で返す。
 // fzf はあいまいに当てるので、*1 が *10〜*19 にも当たらないよう、* を付けるのは1桁の日数だけにする
 func Ago(t, now time.Time) string {
-	y1, m1, d1 := t.Local().Date()
-	y2, m2, d2 := now.Local().Date()
-	days := max(int(time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC).Sub(time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC)).Hours()/24), 0)
+	days := max(int(now.Sub(t)/(24*time.Hour)), 0)
 	if days < 10 {
 		return fmt.Sprintf("*%d", days)
 	}
 	return fmt.Sprintf("%dw", days/7)
 }
 
-// Elapsed は今日（*0）の分にだけ添える経過時間で、1分未満は now、60分未満は分（12m）、それ以上は時間（3h）で返す。
-// 今日の中で並ぶ順の見当と、別のペインや端末でいま開いているかもしれないことが分かれば足りるので、分と時間を組み合わせない
+// Elapsed は24時間以内（*0）の分にだけ添える経過時間で、1分未満は now、60分未満は分（12m）、それ以上は時間（23h）で返す。
+// *0 の中で並ぶ順の見当と、別のペインや端末でいま開いているかもしれないことが分かれば足りるので、分と時間を組み合わせない
 func Elapsed(t, now time.Time) string {
 	if Ago(t, now) != "*0" {
 		return ""
@@ -96,14 +95,14 @@ func Pick(metas []session.Meta, o Options) ([]string, error) {
 	}
 	args := []string{
 		// --no-sort で、絞り込んでも渡した順（新しい順か find の順位）を保つ。
-		// 経過時間（--with-nth 後の4列目）は --nth で絞り込みから外す。数字が当たると *1 や 12 が今日の行にも当たる
+		// 経過時間（--with-nth 後の4列目）は --nth で絞り込みから外す。数字が当たると *1 や 12 が *0 の行にも当たる
 		"--delimiter", "\t", "--with-nth", "2..", "--nth", "1..3", "--no-sort", "--ansi", "--tabstop", "2", "--multi",
 		// 全画面で開く。--height の表示は閉じたあとも描いたものが残り、resume した claude の画面と重なる
 		"--layout", "reverse", "--no-height",
 		// 幅が足りない端末では、題を切らないようにプレビューを下へ回す。fzf の <N は端末ではなくプレビュー欄の幅で比べる
 		"--preview", preview, "--preview-window", "right,55%,wrap,<60(down,45%,wrap)",
 		"--bind", "ctrl-/:toggle-preview",
-		"--header", "enter: resume · tab: select several (tmux windows) · ctrl-/: preview · narrow with @repo #issue *0 (today) *1 …",
+		"--header", "enter: resume · tab: select several (tmux windows) · ctrl-/: preview · narrow with @repo #issue *0 (last 24h) *1 …",
 		"--query", o.Query,
 	}
 	args = append(args, o.Extra...)
