@@ -1,7 +1,7 @@
 ## picker の更新日を、暦の日ではなく24時間ごとに数える
 id: 01
 branch-slug: ago-by-24h
-status: open
+status: close
 type: fix
 対象: internal/picker/picker.go, internal/picker/picker_test.go, docs/guarantees.md, docs/usage.md, context/structure.md, README.md, README.en.md
 内容: `Ago` の `*N` を、手元の暦の日ではなく更新からの経過時間で数える（`*0` は24時間以内、`*1` は24〜48時間前）。深夜0時を過ぎて終えた作業が、翌朝には `*0` に、その少し前の作業は `*1` に割れ、昨夜の作業をまとめて探せない。`Elapsed` も `*0` と同じく24時間以内の分に添える。
