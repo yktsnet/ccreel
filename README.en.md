@@ -15,7 +15,7 @@ On a single machine, it still works as a list you can narrow with `@repo` and `#
 ### You search: every machine's and every repo's conversations in one list
 
 Type `ccreel` and fzf lists sessions from every machine and every config dir, newest first.
-Narrow by repo with `@app`, by issue number with `#417`, or to today with `*0`. Conversations held in a worktree are grouped under the original repo, and the issue number comes from the branch or worktree name.
+Narrow by repo with `@app`, by issue number with `#417`, or to the last 24 hours with `*0`. Conversations held in a worktree are grouped under the original repo, and the issue number comes from the branch or worktree name.
 Enter moves to the directory where the conversation started and resumes it. Select several with Tab, and the second one onward opens in new tmux windows.
 
 ### Claude Code searches: the right conversation, or candidates, in one call

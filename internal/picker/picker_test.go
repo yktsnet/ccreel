@@ -26,20 +26,26 @@ func TestLine(t *testing.T) {
 }
 
 func TestAgo(t *testing.T) {
+	// 深夜0時の直後。暦の日なら1時間前は昨日になる
 	now := time.Date(2026, 3, 10, 0, 30, 0, 0, time.Local)
 	cases := []struct {
 		t    time.Time
 		want string
 	}{
-		{now.Add(-20 * time.Minute), "*0"},
-		// 時間ではなく暦の日で数える。日付をまたいだ1時間前は昨日
-		{now.Add(-time.Hour), "*1"},
-		{time.Date(2026, 3, 7, 23, 0, 0, 0, time.Local), "*3"},
-		{time.Date(2026, 3, 1, 9, 0, 0, 0, time.Local), "*9"},
+		{now.Add(-30 * time.Second), "*0"},
+		// 日付をまたいでも、24時間以内は *0
+		{now.Add(-time.Hour), "*0"},
+		{now.Add(-23*time.Hour - 59*time.Minute), "*0"},
+		// 24時間ちょうどが *1 との境目
+		{now.Add(-24 * time.Hour), "*1"},
+		{now.Add(-47 * time.Hour), "*1"},
+		{now.Add(-3*24*time.Hour - time.Hour), "*3"},
+		{now.Add(-9*24*time.Hour - 23*time.Hour), "*9"},
 		// 10日より前は * を付けず週で出す。*1 が *10 以降に当たらないように
-		{time.Date(2026, 2, 28, 9, 0, 0, 0, time.Local), "1w"},
-		{time.Date(2026, 1, 5, 9, 0, 0, 0, time.Local), "9w"},
-		// 時計のずれで未来の時刻が来ても今日にする
+		{now.Add(-10 * 24 * time.Hour), "1w"},
+		{now.Add(-14 * 24 * time.Hour), "2w"},
+		{now.Add(-63 * 24 * time.Hour), "9w"},
+		// 時計のずれで未来の時刻が来ても *0 にする
 		{now.Add(time.Hour), "*0"},
 	}
 	for _, c := range cases {
@@ -50,7 +56,7 @@ func TestAgo(t *testing.T) {
 }
 
 func TestElapsed(t *testing.T) {
-	now := time.Date(2026, 3, 10, 15, 0, 0, 0, time.Local)
+	now := time.Date(2026, 3, 10, 0, 30, 0, 0, time.Local)
 	cases := []struct {
 		t    time.Time
 		want string
@@ -58,11 +64,16 @@ func TestElapsed(t *testing.T) {
 		{now.Add(-30 * time.Second), "now"},
 		{now.Add(-12 * time.Minute), "12m"},
 		{now.Add(-59 * time.Minute), "59m"},
+		// 日付をまたいだ24時間以内にも出す
+		{now.Add(-time.Hour), "1h"},
 		{now.Add(-3*time.Hour - 40*time.Minute), "3h"},
-		// 時計のずれで未来の時刻が来ても今日の now にする
+		{now.Add(-23*time.Hour - 59*time.Minute), "23h"},
+		// 時計のずれで未来の時刻が来ても now にする
 		{now.Add(time.Minute), "now"},
-		// 今日でなければ出さない
-		{time.Date(2026, 3, 9, 23, 50, 0, 0, time.Local), ""},
+		// 24時間を過ぎたら出さない
+		{now.Add(-24 * time.Hour), ""},
+		{now.Add(-47 * time.Hour), ""},
+		{now.Add(-10 * 24 * time.Hour), ""},
 	}
 	for _, c := range cases {
 		if got := Elapsed(c.t, now); got != c.want {
