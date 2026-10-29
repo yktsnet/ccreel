@@ -33,14 +33,17 @@
 ### 2. `internal/finder/finder_test.go` — internal/finder (ParseQuery / Find)
 
 - `ParseQuery` は `@名前` をリポの指定、`#12` と `12` を Issue 番号として読み、番号は本文の語としても残す
-- `Find` は、題と本文に語が当たったセッションを返し、当たった理由（`title:語`、`body:語×行数`）を添える
+- `Find` は、題と本文に語が当たったセッションを返し、当たった理由（`title:語`、`body:語×数`）を添える。本文の数は、人の発言と応答の文章のうち語を含むものの数である。ツールの呼び出しと出力にしか無い語では本文に当たらない
 - `Find` は、ブランチか worktree の名前の Issue 番号が一致するセッションを返し、理由の先頭に `issue #番号` を置く
 - `Find` は、`@リポ` だけを渡すと、そのリポのセッションだけを返す
+- `Find` は、`@リポ` を読む本数の上限（40本）に絞る前に当てる。他のリポに、仮の点がそのリポのセッションより高いセッションが上限より多くあっても、そのリポのセッションを返す
+- `Find` は、`Exclude` に渡したセッションも、読む本数の上限に絞る前に外す。外したセッションは読む本数に数えない
+- `Find` は、同じ履歴と同じ言葉に対して、毎回同じ候補を同じ順で返す
 - `Find` は、題に語があるセッションを、本文で語をくり返しただけのセッションより上に置く
 - `Find` は、Issue の作業をしたセッション（ブランチ・worktree の番号が一致）を、本文で番号をくり返しただけのセッションより上に置く
 - `Find` は、`Exclude` に渡したセッション（いま話しているもの）を返さない
 - `Find` は、語も番号もリポも無ければ `ErrEmpty` を返す
-- 1位が2位の1.5倍以上で、かつ20点以上離れているとき、または候補が1本だけのときに限り、`decided` を真にする
+- 1位が2位の1.5倍以上で、かつ20点以上離れているときに限り、`decided` を真にする。候補が1本だけのときは2位を0点とみなす
 
 | 保証（要約） | 対応テスト |
 |---|---|
@@ -48,6 +51,10 @@
 | 題と本文で探して理由を返す | `TestFindByTitleAndBody` |
 | Issue 番号で探す | `TestFindByIssue` |
 | `@リポ` だけで絞る | `TestFindByRepoOnly` |
+| `@リポ` を上限の前に当てる | `TestRepoIsAppliedBeforeTheReadLimit` |
+| `Exclude` のセッションを上限の前に外す | `TestExcludeIsAppliedBeforeTheReadLimit` |
+| 毎回同じ候補と同じ順序 | `TestFindIsDeterministic` |
+| ツールの入出力では本文に当たらない | `TestBodyIgnoresToolOutput` |
 | 題の一致が本文のくり返しより上 | `TestTitleOutranksBody`, `TestRanking` |
 | Issue の一致が本文の番号より上 | `TestRanking` |
 | いまのセッションを外す | `TestExcludeCurrent` |
@@ -136,10 +143,12 @@
 | サブエージェントの記録は探さない | `TestCandidates` |
 | 探す範囲と件数の上限 | `TestSearch` |
 
-### 7. `internal/session/session_test.go` — internal/session (Discover / Scan)
+### 7. `internal/session/session_test.go` — internal/session (Discover / Scan / ScanAllTerms)
 
 - 一覧に出すのは projects 直下のセッションだけで、`<uuid>/subagents/` などの付属物は出さない
 - 一覧の1行は、題（最後に付け直されたもの）・最初の発言（スラッシュコマンドは打った形）・最後の cwd・リポ・ブランチ・Issue 番号・発言の数・最初と最後の時刻を持つ。発言の数に、`isMeta`・`tool_result`・サブエージェントの発言は入れない
+- Issue 番号は、セッションの途中で Issue のブランチか worktree にいれば、最後に main へ戻っていても残す。複数あれば最後に現れたものにする
+- `ScanAllTerms` は、語ごとに、人の発言と応答の文章のうちその語を含むものの数を数える。ツールの呼び出しと出力・添付・サブエージェント側の応答は数えない
 - 一覧は新しい順に並び、発言の無いセッションと、`claude -p` で動かしたセッション（`entrypoint` が `sdk-cli`）は出さない
 - 同じ UUID が複数のプロジェクトにあるときは、更新の新しい方の1行だけを出す
 - リポ名は起動した場所の cwd から取る。ホームで起動したセッションは最後の cwd から取る
@@ -154,23 +163,28 @@
 | `claude -p` のセッションを出さない | `TestScanAllSkipsHeadless` |
 | 同じ UUID は1行にまとめる | `TestSameUUIDInTwoProjects` |
 | リポは起動した場所から | `TestRepoComesFromWhereTheSessionStarted` |
+| 途中で現れた Issue 番号を残す | `TestIssueSurvivesReturnToMain` |
+| 語の当たりは会話の文章だけで数える | `TestScanAllTermsCountsConversationOnly` |
 
 ### 8. `internal/session/transcript_test.go` — internal/session (ReadTurns / Find)
 
 - セッションを、人の発言1つと次の発言の前までの応答（文章・ツールの呼び出し・ツールの出力）に分ける。ツールの出力には呼んだツールの名前を付け、ターンの最終応答はその中の最後の文章にする
 - セッション ID は UUID の先頭の数文字で引ける。当たらない指定、16進とハイフン以外を含む指定、複数のセッションに当たる指定はエラーにする。同じ UUID が複数のプロジェクトにあるときは、更新の新しい方を返す
 - compact のあとに自動で入る要約は、人の発言として数えない
+- 画像を添えた発言と、`<pasted_content>` で始まる発言は、人の発言として数える。中断を示す文言（`[Request interrupted by user]`、`for tool use` を含む）・`tool_result` を含むもの・バックグラウンドの作業の通知・コマンドの出力は数えない
 
 | 保証（要約） | 対応テスト |
 |---|---|
 | ターンへの分け方 | `TestReadTurns` |
 | ID の引き方 | `TestFind`, `TestSameUUIDInTwoProjects` |
 | compact の要約を数えない | `TestPromptTextSkipsCompactSummary` |
+| 発言に数える形と数えない形 | `TestPromptTextShapes` |
 
-### 9. `cmd/ccreel/cli_test.go` — cmd/ccreel (resume / show / outline / find / pick / push / preview)
+### 9. `cmd/ccreel/cli_test.go` — cmd/ccreel (resume / show / outline / list / search / find / pick / push / preview)
 
 - `resume` は、`CCREEL_CONFIG_DIRS` のどの config dir にあるセッションでも ID から引き、記録された cwd へ移って、そのセッションのある config dir を `CLAUDE_CONFIG_DIR` にして claude を起動する
 - `show` と `outline` は、`CCREEL_CONFIG_DIRS` の別の config dir にあるセッションも ID から引く
+- `list` と `search` は、`CCREEL_CONFIG_DIRS` のすべての config dir を探す。まだ `projects` の無い config dir が混ざっていても失敗しない
 - `find` は、複数の config dir のセッションを合わせて順位を付け、候補ごとに `config_dir` を返す
 - `pick <言葉>` は、`find` と同じ順位で fzf に行を渡す
 - `pick` は、`CCREEL_CONFIG_DIRS` のすべての config dir のセッションを fzf に渡す
@@ -183,6 +197,7 @@
 |---|---|
 | 別の config dir のセッションを、その config dir で resume | `TestResumeUsesTheSessionsConfigDir` |
 | 別の config dir のセッションを show・outline | `TestShowFindsSessionInOtherConfigDir` |
+| `list` と `search` はすべての config dir を探す | `TestListAndSearchLookInEveryConfigDir` |
 | 複数の config dir を合わせた順位 | `TestFindRanksAcrossConfigDirs` |
 | `pick <言葉>` の並びは `find` の順位 | `TestPickWithWordsUsesFindOrder` |
 | `pick` はすべての config dir を出す | `TestPickListsEveryConfigDir` |
@@ -204,4 +219,4 @@
 
 ## About
 
-対象は `ccreel` の CLI のサブコマンドと出力、ハブに置くデータの形、push と pull の約束、同梱の skill が頼る `find` の順位。fzf の画面の見た目や、rg が無い環境でも本文の当たり行数が変わらないことといった内部の作りは対象外。**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる**。 地位は design-decisions.md 相当のドキュメントと同格。
+対象は `ccreel` の CLI のサブコマンドと出力、ハブに置くデータの形、push と pull の約束、同梱の skill が頼る `find` の順位である。fzf の画面の見た目や、rg が無い環境でも仮の順位に使う当たり行数が変わらないことなど、内部の作りは対象外である。**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる**。地位は design-decisions.md 相当のドキュメントと同格である。

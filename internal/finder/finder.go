@@ -70,8 +70,6 @@ type Candidate struct {
 	ConfigDir string   `json:"config_dir"`
 	Score     int      `json:"score"`
 	Reasons   []string `json:"reasons"`
-
-	body map[string]int // 言葉ごとの本文の当たり行数
 }
 
 type Result struct {
@@ -114,7 +112,7 @@ func Find(q Query, o Options) (Result, error) {
 	}
 	var all []Candidate
 	for _, dir := range o.ConfigDirs {
-		cs, err := collect(q, dir)
+		cs, err := collect(q, o, dir)
 		if err != nil {
 			return res, err
 		}
@@ -143,39 +141,44 @@ func Find(q Query, o Options) (Result, error) {
 	return res, nil
 }
 
+// 候補が1本だけのときは2位を0点とみなす。本文に1回出ただけの1本を、決まりとして読ませない
 func decided(cs []Candidate) bool {
-	switch len(cs) {
-	case 0:
+	if len(cs) == 0 {
 		return false
-	case 1:
-		return true
 	}
-	a, b := float64(cs[0].Score), float64(cs[1].Score)
+	a, b := float64(cs[0].Score), 0.0
+	if len(cs) > 1 {
+		b = float64(cs[1].Score)
+	}
 	return a >= b*decideRatio && a-b >= decideGap
 }
 
 // collect は1つの config dir から、番号・言葉のどれかに当たるセッションを集め、言葉ごとの本文の当たり数を添える。
-// @リポ だけの指定では本文を探さず、全部のセッションを候補にする。
-func collect(q Query, configDir string) ([]Candidate, error) {
+// @リポ だけの指定では本文を探さず、そのリポの全部のセッションを候補にする。
+func collect(q Query, o Options, configDir string) ([]Candidate, error) {
 	root := filepath.Join(configDir, "projects")
 	if _, err := os.Stat(root); err != nil {
 		return nil, nil
 	}
-	found := map[string]map[string]int{}
+	found := map[string]bool{}
 	prelim := map[string]int{}
-	get := func(p string) map[string]int {
-		if found[p] == nil {
-			found[p] = map[string]int{}
-		}
-		return found[p]
-	}
 	if len(q.Terms) == 0 && q.Issue == "" {
 		paths, err := session.Discover(configDir)
 		if err != nil {
 			return nil, err
 		}
 		for _, p := range paths {
-			get(p)
+			found[p] = true
+		}
+	}
+	// リポは Scan するまで決まらないが、読む本数を絞る前に外さないと、他のリポの候補に押し出される。
+	// Meta.Repo は cwd のどれかの末尾（worktree なら元のリポ）から取るので、その名前が cwd に無いものは外してよい
+	var inRepo map[string]int
+	if q.Repo != "" {
+		var err error
+		inRepo, err = count(root, `"cwd":"[^"]*/`+regexp.QuoteMeta(q.Repo)+`[/".]`, false)
+		if err != nil {
+			return nil, err
 		}
 	}
 	if q.Issue != "" {
@@ -186,7 +189,7 @@ func collect(q Query, configDir string) ([]Candidate, error) {
 			return nil, err
 		}
 		for p := range counts {
-			get(p)
+			found[p] = true
 			prelim[p] += issueScore
 		}
 	}
@@ -196,7 +199,7 @@ func collect(q Query, configDir string) ([]Candidate, error) {
 			return nil, err
 		}
 		for p, n := range counts {
-			get(p)[t] = n
+			found[p] = true
 			prelim[p] += bodyScore(n)
 		}
 		// 題は jsonl の ai-title の行にある。付け直された古い題にも当たるが、仮の順位には足りる
@@ -210,16 +213,38 @@ func collect(q Query, configDir string) ([]Candidate, error) {
 	}
 
 	paths := make([]string, 0, len(found))
+	mtime := map[string]int64{}
 	for p := range found {
+		if inRepo != nil && inRepo[p] == 0 {
+			continue
+		}
+		if o.Exclude != "" && strings.TrimSuffix(filepath.Base(p), ".jsonl") == o.Exclude {
+			continue
+		}
+		if fi, err := os.Stat(p); err == nil {
+			mtime[p] = fi.ModTime().UnixNano()
+		}
 		paths = append(paths, p)
 	}
+	// map の順に任せると、同点のどれを読むかが実行のたびに変わる
+	sort.Slice(paths, func(i, j int) bool {
+		a, b := paths[i], paths[j]
+		if prelim[a] != prelim[b] {
+			return prelim[a] > prelim[b]
+		}
+		if mtime[a] != mtime[b] {
+			return mtime[a] > mtime[b]
+		}
+		return a < b
+	})
 	if len(paths) > scanMax {
-		sort.Slice(paths, func(i, j int) bool { return prelim[paths[i]] > prelim[paths[j]] })
 		paths = paths[:scanMax]
 	}
+	// rg の数は jsonl の生の行なので、ツールの出力・注入された CLAUDE.md・過去に ccreel find を呼んだ行にも当たる。
+	// 本文の点は、会話で話したかで付けるよう、読むときに発言と文章の応答だけで数え直す
 	var out []Candidate
-	for _, m := range session.ScanAll(paths) {
-		out = append(out, Candidate{Meta: m, ConfigDir: configDir, body: found[m.Path]})
+	for _, m := range session.ScanAllTerms(paths, q.Terms) {
+		out = append(out, Candidate{Meta: m, ConfigDir: configDir})
 	}
 	return out, nil
 }
@@ -236,7 +261,7 @@ func score(c *Candidate, q Query, o Options) bool {
 	all := len(q.Terms) > 0
 	for _, t := range q.Terms {
 		inTitle := title != "" && strings.Contains(title, strings.ToLower(t))
-		n := c.body[t]
+		n := c.Hits[t]
 		if inTitle {
 			c.Score += titleScore
 			c.Reasons = append(c.Reasons, "title:"+t)

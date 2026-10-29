@@ -171,3 +171,40 @@ func TestRepoComesFromWhereTheSessionStarted(t *testing.T) {
 		}
 	}
 }
+
+func TestIssueSurvivesReturnToMain(t *testing.T) {
+	dir := t.TempDir()
+	// worktree で Issue の作業をし、PR を出して worktree を消したあと、元のチェックアウトの main に戻ったセッション。
+	// 途中で2つの Issue を扱ったら、最後に現れた番号を使う
+	p := writeSession(t, dir, "-src-app", "dddddddd-0000-4000-8000-000000000001", time.Now(),
+		userLine("/src/app", "2026-03-01T09:00:00Z", "start", `"gitBranch":"main",`),
+		userLine("/src/app/.claude/worktrees/12-setup", "2026-03-01T09:30:00Z", "first issue", `"gitBranch":"claude/12-setup",`),
+		userLine("/src/app/.claude/worktrees/417-login", "2026-03-01T10:00:00Z", "work", `"gitBranch":"claude/417-login",`),
+		userLine("/src/app", "2026-03-01T11:00:00Z", "after the PR", `"gitBranch":"main",`))
+	m, err := Scan(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Issue != "417" || m.Branch != "main" {
+		t.Errorf("Issue = %q, Branch = %q; want 417, main", m.Issue, m.Branch)
+	}
+}
+
+func TestScanAllTermsCountsConversationOnly(t *testing.T) {
+	dir := t.TempDir()
+	p := writeSession(t, dir, "-src-app", "eeeeeeee-0000-4000-8000-000000000001", time.Now(),
+		userLine("/src/app", "2026-03-01T09:00:00Z", "set up WireGuard", ""),
+		`{"type":"assistant","timestamp":"2026-03-01T09:00:01Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"wg show wireguard"}}]}}`,
+		`{"type":"user","timestamp":"2026-03-01T09:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"wireguard: up"}]}}`,
+		`{"type":"assistant","timestamp":"2026-03-01T09:00:03Z","message":{"role":"assistant","content":[{"type":"text","text":"The wireguard tunnel is up."}]}}`,
+		`{"type":"attachment","attachment":{"type":"instructions","content":"wireguard notes from CLAUDE.md"}}`,
+		`{"type":"assistant","isSidechain":true,"timestamp":"2026-03-01T09:00:04Z","message":{"role":"assistant","content":[{"type":"text","text":"wireguard"}]}}`)
+	metas := ScanAllTerms([]string{p}, []string{"wireguard", "absent"})
+	if len(metas) != 1 {
+		t.Fatalf("got %d metas", len(metas))
+	}
+	// 発言と文章の応答の2つ。ツールの入出力・添付・サブエージェント側は数えない
+	if got := metas[0].Hits; got["wireguard"] != 2 || got["absent"] != 0 {
+		t.Errorf("Hits = %v, want wireguard:2", got)
+	}
+}

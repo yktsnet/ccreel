@@ -37,7 +37,7 @@ Commands:
 <id> may be any unique prefix of the session UUID.
 The hub is an rsync destination such as host:path, given by --hub or CCREEL_HUB.
 Arguments after -- in pick and resume are passed to claude.
-CCREEL_CONFIG_DIRS (colon-separated) adds config dirs that pick, find, show, outline and resume also look in.
+CCREEL_CONFIG_DIRS (colon-separated) adds config dirs that every command except push and pull also looks in.
 list and pick hide sessions with a single prompt; --all shows them.
 Run 'ccreel <command> -h' for flags.
 `
@@ -188,7 +188,7 @@ func runList(args []string, w, _ io.Writer) error {
 	if err != nil {
 		return err
 	}
-	paths, err := session.Discover(c.configDir)
+	paths, err := discoverAll(configDirs(c.configDir))
 	if err != nil {
 		return err
 	}
@@ -397,9 +397,13 @@ func runSearch(args []string, w, errw io.Writer) error {
 	if err != nil {
 		return err
 	}
-	paths, err := session.Candidates(c.configDir, query)
-	if err != nil {
-		return err
+	var paths []string
+	for _, d := range configDirs(c.configDir) {
+		p, err := session.Candidates(d, query)
+		if err != nil {
+			return err
+		}
+		paths = append(paths, p...)
 	}
 	hits, err := session.Search(paths, query, session.SearchOptions{
 		Tools: *tools, Context: *ctx, Limit: *limit, PerSession: *perSession, Filter: keep,
@@ -555,13 +559,9 @@ func runPick(args []string, _, errw io.Writer) error {
 			}
 		}
 	} else {
-		var paths []string
-		for _, d := range dirs {
-			p, err := session.Discover(d)
-			if err != nil {
-				return err
-			}
-			paths = append(paths, p...)
+		paths, err := discoverAll(dirs)
+		if err != nil {
+			return err
 		}
 		for _, m := range session.ScanAll(paths) {
 			if keep(m) {
@@ -740,6 +740,18 @@ func configDirs(primary string) []string {
 		}
 	}
 	return dirs
+}
+
+func discoverAll(dirs []string) ([]string, error) {
+	var paths []string
+	for _, d := range dirs {
+		p, err := session.Discover(d)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, p...)
+	}
+	return paths, nil
 }
 
 // findSession は ID を全部の config dir から引き、見つかったパスと config dir を返す。

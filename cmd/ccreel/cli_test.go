@@ -322,3 +322,24 @@ func TestPickOpensExtraSelectionsInTmux(t *testing.T) {
 		t.Errorf("claude line %q, want --resume %s", lines[1], otherID)
 	}
 }
+
+func TestListAndSearchLookInEveryConfigDir(t *testing.T) {
+	work, _ := secondConfigDir(t)
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	// まだ projects の無い config dir が混ざっていても失敗しない
+	t.Setenv("CCREEL_CONFIG_DIRS", work+":"+t.TempDir())
+	var out, errw bytes.Buffer
+	if err := runList([]string{"--all", "--json"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), otherID) || !strings.Contains(out.String(), "11111111") {
+		t.Errorf("list = %q", out.String())
+	}
+	out.Reset()
+	if err := runSearch([]string{"work app", "--json"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), otherID) {
+		t.Errorf("search = %q, stderr = %q", out.String(), errw.String())
+	}
+}
