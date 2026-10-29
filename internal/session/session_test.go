@@ -174,9 +174,11 @@ func TestRepoComesFromWhereTheSessionStarted(t *testing.T) {
 
 func TestIssueSurvivesReturnToMain(t *testing.T) {
 	dir := t.TempDir()
-	// worktree で Issue の作業をし、PR を出して worktree を消したあと、元のチェックアウトの main に戻ったセッション
+	// worktree で Issue の作業をし、PR を出して worktree を消したあと、元のチェックアウトの main に戻ったセッション。
+	// 途中で2つの Issue を扱ったら、最後に現れた番号を使う
 	p := writeSession(t, dir, "-src-app", "dddddddd-0000-4000-8000-000000000001", time.Now(),
 		userLine("/src/app", "2026-03-01T09:00:00Z", "start", `"gitBranch":"main",`),
+		userLine("/src/app/.claude/worktrees/12-setup", "2026-03-01T09:30:00Z", "first issue", `"gitBranch":"claude/12-setup",`),
 		userLine("/src/app/.claude/worktrees/417-login", "2026-03-01T10:00:00Z", "work", `"gitBranch":"claude/417-login",`),
 		userLine("/src/app", "2026-03-01T11:00:00Z", "after the PR", `"gitBranch":"main",`))
 	m, err := Scan(p)

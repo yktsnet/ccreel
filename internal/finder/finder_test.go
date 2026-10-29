@@ -227,6 +227,32 @@ func TestRepoIsAppliedBeforeTheReadLimit(t *testing.T) {
 	}
 }
 
+func TestExcludeIsAppliedBeforeTheReadLimit(t *testing.T) {
+	dir := t.TempDir()
+	// いまのセッションが仮の点で1位、その下に上限ちょうどの本数があり、対象は最下位
+	const current = "aaaaaaaa-0000-4000-8000-999999999999"
+	writeRepoSession(t, dir, "app", current, "wireguard wireguard", 9)
+	for i := 0; i < scanMax-1; i++ {
+		writeRepoSession(t, dir, "app", fmt.Sprintf("aaaaaaaa-0000-4000-8000-%012d", i), "wireguard wireguard", 5)
+	}
+	const target = "ffffffff-0000-4000-8000-000000000001"
+	writeRepoSession(t, dir, "app", target, "wireguard", 1)
+	r, err := Find(ParseQuery([]string{"wireguard"}), Options{ConfigDirs: []string{dir}, Now: now, Exclude: current, Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, c := range r.Candidates {
+		if c.ID == current {
+			t.Errorf("current session was returned")
+		}
+		found = found || c.ID == target
+	}
+	if !found || len(r.Candidates) != scanMax {
+		t.Errorf("got %d candidates, target found = %v", len(r.Candidates), found)
+	}
+}
+
 func TestFindIsDeterministic(t *testing.T) {
 	dir := t.TempDir()
 	for i := 0; i < scanMax+10; i++ {

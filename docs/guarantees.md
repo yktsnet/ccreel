@@ -37,6 +37,7 @@
 - `Find` は、ブランチか worktree の名前の Issue 番号が一致するセッションを返し、理由の先頭に `issue #番号` を置く
 - `Find` は、`@リポ` だけを渡すと、そのリポのセッションだけを返す
 - `Find` は、`@リポ` を読む本数の上限（40本）に絞る前に当てる。他のリポに、仮の点がそのリポのセッションより高いセッションが上限より多くあっても、そのリポのセッションを返す
+- `Find` は、`Exclude` に渡したセッションも、読む本数の上限に絞る前に外す。外したセッションは読む本数に数えない
 - `Find` は、同じ履歴と同じ言葉に対して、毎回同じ候補を同じ順で返す
 - `Find` は、題に語があるセッションを、本文で語をくり返しただけのセッションより上に置く
 - `Find` は、Issue の作業をしたセッション（ブランチ・worktree の番号が一致）を、本文で番号をくり返しただけのセッションより上に置く
@@ -51,6 +52,7 @@
 | Issue 番号で探す | `TestFindByIssue` |
 | `@リポ` だけで絞る | `TestFindByRepoOnly` |
 | `@リポ` を上限の前に当てる | `TestRepoIsAppliedBeforeTheReadLimit` |
+| `Exclude` のセッションを上限の前に外す | `TestExcludeIsAppliedBeforeTheReadLimit` |
 | 毎回同じ候補と同じ順序 | `TestFindIsDeterministic` |
 | ツールの入出力では本文に当たらない | `TestBodyIgnoresToolOutput` |
 | 題の一致が本文のくり返しより上 | `TestTitleOutranksBody`, `TestRanking` |
@@ -217,4 +219,4 @@
 
 ## About
 
-対象は `ccreel` の CLI のサブコマンドと出力、ハブに置くデータの形、push と pull の約束、同梱の skill が頼る `find` の順位。fzf の画面の見た目や、rg が無い環境でも本文の当たり行数が変わらないことといった内部の作りは対象外。**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる**。 地位は design-decisions.md 相当のドキュメントと同格。
+対象は `ccreel` の CLI のサブコマンドと出力、ハブに置くデータの形、push と pull の約束、同梱の skill が頼る `find` の順位である。fzf の画面の見た目や、rg が無い環境でも仮の順位に使う当たり行数が変わらないことなど、内部の作りは対象外である。**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる**。地位は design-decisions.md 相当のドキュメントと同格である。
