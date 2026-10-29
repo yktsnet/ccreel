@@ -33,6 +33,8 @@ type Meta struct {
 	Updated     time.Time `json:"updated"`
 	// claude -p で動かしたセッション。人が会話したものではないので一覧に出さない
 	Headless bool `json:"-"`
+	// ScanAllTerms に渡した語ごとの、語を含む発言と文章の応答の数。ツールの入出力は数えない
+	Hits map[string]int `json:"-"`
 }
 
 // Discover は projects 直下のセッションだけを返す。<uuid>/subagents などの付属物は一覧に出さない。
@@ -121,6 +123,11 @@ func relevant(line []byte) bool {
 
 // Scan はセッション1本を読み、一覧用の情報を組み立てる。
 func Scan(path string) (Meta, error) {
+	return scan(path, nil)
+}
+
+// scan は terms があれば、同じ読み出しの中で Meta.Hits を数える。数えるために読み直すと find が遅くなる
+func scan(path string, terms []string) (Meta, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Meta{}, err
@@ -133,6 +140,23 @@ func Scan(path string) (Meta, error) {
 		Project: filepath.Base(filepath.Dir(path)),
 	}
 	var firstCWD string
+	var branch, cwd string
+	lower := make([]string, len(terms))
+	for i, t := range terms {
+		lower[i] = strings.ToLower(t)
+	}
+	counting := len(terms) > 0
+	if counting {
+		m.Hits = map[string]int{}
+	}
+	hit := func(text string) {
+		text = strings.ToLower(text)
+		for i, t := range lower {
+			if strings.Contains(text, t) {
+				m.Hits[terms[i]]++
+			}
+		}
+	}
 	err = eachRecord(f, func(r record) {
 		if !r.Timestamp.IsZero() {
 			if m.Started.IsZero() || r.Timestamp.Before(m.Started) {
@@ -154,6 +178,13 @@ func Scan(path string) (Meta, error) {
 		if r.GitBranch != "" {
 			m.Branch = r.GitBranch
 		}
+		// PR を出して worktree を消すと最後は main に戻るので、途中で現れた番号を残す
+		if m.Branch != branch || m.CWD != cwd {
+			branch, cwd = m.Branch, m.CWD
+			if n := issueNumber(branch, cwd); n != "" {
+				m.Issue = n
+			}
+		}
 		switch r.Type {
 		case "ai-title":
 			// 会話が進むと付け直されるので、最後のものを使う
@@ -163,6 +194,18 @@ func Scan(path string) (Meta, error) {
 				m.Prompts++
 				if m.FirstPrompt == "" {
 					m.FirstPrompt = text
+				}
+				if counting {
+					hit(text)
+				}
+			}
+		case "assistant":
+			// ReadTurns と同じく、最初の発言より前の応答とサブエージェント側の応答は数えない
+			if counting && m.Prompts > 0 && !r.IsSidechain {
+				for _, b := range contentBlocks(r.Message) {
+					if b.Type == "text" {
+						hit(b.Text)
+					}
 				}
 			}
 		}
@@ -176,7 +219,6 @@ func Scan(path string) (Meta, error) {
 		}
 	}
 	m.Repo = repoName(repoCWD(firstCWD, m.CWD))
-	m.Issue = issueNumber(m.Branch, m.CWD)
 	return m, nil
 }
 
@@ -217,25 +259,38 @@ func promptText(r record) (string, bool) {
 		if json.Unmarshal(msg.Content, &blocks) != nil {
 			return "", false
 		}
+		// 画像を添えた発言は image ブロックと text ブロックが並ぶ。tool_result を含むものだけが発言でない
 		for _, b := range blocks {
-			if b.Type != "text" {
+			switch b.Type {
+			case "text":
+				text += b.Text
+			case "tool_result":
 				return "", false
 			}
-			text += b.Text
 		}
 	}
 	text = commandText(strings.TrimSpace(text))
-	// compact のあとに自動で入る要約は、人の発言ではない
-	if strings.HasPrefix(text, "This session is being continued from a previous conversation") {
-		return "", false
+	for _, p := range notPrompts {
+		if strings.HasPrefix(text, p) {
+			return "", false
+		}
 	}
 	return text, text != ""
+}
+
+// 人の発言と同じ形で記録されるが、人が打ったものではない
+var notPrompts = []string{
+	// compact のあとに自動で入る要約
+	"This session is being continued from a previous conversation",
+	// 応答を止めたときの印。`[Request interrupted by user for tool use]` もある
+	"[Request interrupted by user",
 }
 
 // スラッシュコマンドは <command-name> と <command-args> のタグで記録されるので、打った形に戻す。
 // <local-command-stdout> などコマンドの出力は発言ではないので落とす。
 func commandText(s string) string {
-	if !strings.HasPrefix(s, "<") {
+	// 貼り付けた文章はタグで包まれるが、人の発言である
+	if !strings.HasPrefix(s, "<") || strings.HasPrefix(s, "<pasted_content") {
 		return s
 	}
 	name := between(s, "<command-name>", "</command-name>")
@@ -330,6 +385,11 @@ func issueNumber(branch, cwd string) string {
 // ScanAll は並列に読み、新しい順に返す。読めなかったファイルと、人の発言が無いセッションは飛ばす。
 // 同じ UUID が複数のプロジェクトにあれば、更新の新しい方だけを残す。
 func ScanAll(paths []string) []Meta {
+	return ScanAllTerms(paths, nil)
+}
+
+// ScanAllTerms は ScanAll と同じ一覧を返し、各行の Hits に語ごとの当たり数を入れる。
+func ScanAllTerms(paths []string, terms []string) []Meta {
 	out := make([]Meta, len(paths))
 	ok := make([]bool, len(paths))
 	sem := make(chan struct{}, 8)
@@ -340,7 +400,7 @@ func ScanAll(paths []string) []Meta {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			m, err := Scan(p)
+			m, err := scan(p, terms)
 			if err == nil && m.Prompts > 0 && !m.Headless {
 				out[i], ok[i] = m, true
 			}

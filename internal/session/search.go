@@ -33,6 +33,10 @@ type SearchOptions struct {
 // rg が無ければ同じ絞り込みを Go で行う。
 func Candidates(configDir, query string) ([]string, error) {
 	root := filepath.Join(configDir, "projects")
+	// CCREEL_CONFIG_DIRS には、まだ使っていない config dir が入っていることがある。rg は無いパスを失敗にする
+	if _, err := os.Stat(root); err != nil {
+		return nil, nil
+	}
 	if _, err := exec.LookPath("rg"); err == nil {
 		out, err := exec.Command("rg", "-l", "-F", "-i", "--max-depth", "2", "--glob", "*.jsonl", "--", query, root).Output()
 		var ee *exec.ExitError

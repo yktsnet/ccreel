@@ -71,3 +71,25 @@ func TestPromptTextSkipsCompactSummary(t *testing.T) {
 		t.Error("compact summary counted as a prompt")
 	}
 }
+
+func TestPromptTextShapes(t *testing.T) {
+	cases := []struct {
+		name, content string
+		want          string // 空なら発言でない
+	}{
+		{"image", `[{"type":"image","source":{"type":"base64","data":"AAAA"}},{"type":"text","text":"[Image #1] this button is off"}]`, "[Image #1] this button is off"},
+		{"pasted", `"<pasted_content id=\"x\">log line</pasted_content>\nwhy does this fail"`, "<pasted_content id=\"x\">log line</pasted_content>\nwhy does this fail"},
+		{"interrupted", `[{"type":"text","text":"[Request interrupted by user]"}]`, ""},
+		{"interrupted for tool use", `[{"type":"text","text":"[Request interrupted by user for tool use]"}]`, ""},
+		{"tool result", `[{"type":"tool_result","tool_use_id":"t1","content":"ok"},{"type":"text","text":"note"}]`, ""},
+		{"task notification", `"<task-notification><task-id>x</task-id></task-notification>"`, ""},
+		{"command output", `"<local-command-stdout>done</local-command-stdout>"`, ""},
+	}
+	for _, c := range cases {
+		r := record{Type: "user", Message: []byte(`{"role":"user","content":` + c.content + `}`)}
+		got, ok := promptText(r)
+		if ok != (c.want != "") || got != c.want {
+			t.Errorf("%s: promptText = %q, %v; want %q", c.name, got, ok, c.want)
+		}
+	}
+}

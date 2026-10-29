@@ -51,7 +51,7 @@
 | 変数 | 意味 |
 |---|---|
 | `CCREEL_HUB` | ハブの rsync の宛先。`host:path` なら ssh の先、それ以外は手元のディレクトリ。`--hub` でも渡せる |
-| `CCREEL_CONFIG_DIRS` | まとめて扱う config dir（コロン区切り）。`pick`・`find`・`show`・`outline`・`resume` が全部を探す |
+| `CCREEL_CONFIG_DIRS` | まとめて扱う config dir（コロン区切り）。`push`・`pull` 以外のサブコマンドが全部を探す |
 | `CLAUDE_CONFIG_DIR` | 既定の config dir。無ければ `~/.claude`。`--config-dir` が優先する |
 | `CCREEL_FZF_OPTS` | fzf に足す引数 |
 | `CCREEL_CLAUDE` | `claude` の代わりに起動するコマンド |

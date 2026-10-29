@@ -48,7 +48,7 @@ func TestFindByTitleAndBody(t *testing.T) {
 	if ids(r) != "[11111111]" || !r.Decided {
 		t.Fatalf("got %s decided=%v", ids(r), r.Decided)
 	}
-	if fmt.Sprint(r.Candidates[0].Reasons) != "[title:parser body:parser×8]" {
+	if fmt.Sprint(r.Candidates[0].Reasons) != "[title:parser body:parser×2]" {
 		t.Errorf("reasons = %v", r.Candidates[0].Reasons)
 	}
 }
@@ -107,7 +107,8 @@ func TestDecided(t *testing.T) {
 		want bool
 	}{
 		{c(), false},
-		{c(5), true},
+		{c(25), true},
+		{c(5), false}, // 1本だけでも、2位を0点とみなして差が20に届かない
 		{c(65, 25), true},
 		{c(130, 91), false}, // 1.5倍に届かない
 		{c(40, 25), false},  // 1.5倍だが差が20に届かない
@@ -186,5 +187,89 @@ func TestRanking(t *testing.T) {
 	}
 	if len(r.Candidates) < 2 || r.Candidates[0].ID != titled {
 		t.Errorf("router: got %s", ids(r))
+	}
+}
+
+// writeRepoSession は cwd のリポを選べる writeSession。text を n 回の応答にする。
+func writeRepoSession(t *testing.T, dir, repo, id, text string, n int) {
+	t.Helper()
+	p := filepath.Join(dir, "projects", "-home-alice-src-"+repo, id+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, `{"type":"user","message":{"role":"user","content":"start"},"timestamp":"2026-03-01T09:00:00Z","cwd":"/home/alice/src/%s"}`+"\n", repo)
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&b, `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":%q}]},"timestamp":"2026-03-01T09:01:00Z"}`+"\n", text)
+	}
+	if err := os.WriteFile(p, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRepoIsAppliedBeforeTheReadLimit(t *testing.T) {
+	dir := t.TempDir()
+	// 他のリポに、仮の点が上で同点のセッションを読む上限より多く置く
+	for i := 0; i < scanMax+10; i++ {
+		writeRepoSession(t, dir, fmt.Sprintf("noise%02d", i), fmt.Sprintf("aaaaaaaa-0000-4000-8000-%012d", i), "wireguard wireguard", 5)
+	}
+	const target = "ffffffff-0000-4000-8000-000000000001"
+	writeRepoSession(t, dir, "net", target, "wireguard", 1)
+	o := Options{ConfigDirs: []string{dir}, Now: now}
+	for _, words := range [][]string{{"@net", "wireguard"}, {"@net"}} {
+		r, err := Find(ParseQuery(words), o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(r.Candidates) != 1 || r.Candidates[0].ID != target {
+			t.Errorf("%v: got %s", words, ids(r))
+		}
+	}
+}
+
+func TestFindIsDeterministic(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < scanMax+10; i++ {
+		writeRepoSession(t, dir, "app", fmt.Sprintf("aaaaaaaa-0000-4000-8000-%012d", i), "wireguard", 1)
+	}
+	o := Options{ConfigDirs: []string{dir}, Now: now, Limit: 100}
+	first := ""
+	for i := 0; i < 5; i++ {
+		r, err := Find(ParseQuery([]string{"wireguard"}), o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, c := range r.Candidates {
+			got = append(got, c.ID)
+		}
+		if s := fmt.Sprint(got); first == "" {
+			first = s
+		} else if s != first {
+			t.Fatalf("run %d differs:\n%s\n%s", i, s, first)
+		}
+	}
+}
+
+func TestBodyIgnoresToolOutput(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "projects", "-home-alice-src-app", "cccccccc-0000-4000-8000-000000000001.jsonl")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 語はツールの呼び出しと出力にしか無い（過去に ccreel find を呼んだだけのセッション）
+	lines := `{"type":"user","message":{"role":"user","content":"look something up"},"timestamp":"2026-03-01T09:00:00Z","cwd":"/home/alice/src/app"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ccreel find wireguard --json"}}]},"timestamp":"2026-03-01T09:00:01Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"wireguard"}]},"timestamp":"2026-03-01T09:00:02Z"}
+`
+	if err := os.WriteFile(p, []byte(lines), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Find(ParseQuery([]string{"wireguard"}), Options{ConfigDirs: []string{dir}, Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Candidates) != 0 {
+		t.Errorf("got %s; a word only in tool calls and output should not match", ids(r))
 	}
 }

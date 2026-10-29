@@ -10,7 +10,7 @@ description: Look up past Claude Code sessions with the ccreel CLI. Use when the
 
 - The session you are running in is always left out, so "the newest session" is the previous one.
 - `<id>` accepts any unique prefix of the session UUID; the first 8 characters are enough.
-  `show`, `outline` and `resume` find the session in any config dir listed in `CCREEL_CONFIG_DIRS`.
+  Every command looks in all config dirs listed in `CCREEL_CONFIG_DIRS`.
 - Always pass `--json`. When output is cut short, a line starting with `ccreel:` on stderr says
   what was dropped and which flag widens it.
 
@@ -45,7 +45,9 @@ Then follow the result:
    identifier, a shorter word). If there is still nothing, say so; do not guess.
 
 Each candidate has `reasons`: `issue #N` (on that issue's branch or worktree), `title:<word>`,
-`body:<word>×<lines>`, `all terms`, `same repo` (the repo you were called from).
+`body:<word>×<n>` (n prompts and replies contain the word), `all terms`, `same repo` (the repo you
+were called from). `find` reads only what was said, not tool calls or tool output: to find a
+command, a file path or an error message, use `search <phrase> --tools --json`.
 
 ## Continue the previous session in this repo
 
@@ -82,8 +84,9 @@ for sessions whose topic is unclear from those two fields. Use `--since 7d` for 
   (`--max-total`). Narrow with `--turns` or `--last` rather than raising the caps.
 - `show --final` keeps only the last reply of each turn.
 - Tool calls and tool output are left out unless you pass `--tools`.
-- `search <phrase>` returns the matching lines with context when you need to locate a quote inside
-  a session you already chose.
+- `search <phrase>` returns the places a phrase appears, newest session first, each with its `id`
+  and `turn`; read around one with `show <id> --turns <turn>`. It searches every session, so to
+  stay inside the one you chose, keep only the hits whose `id` matches.
 
 When you report what you found, name the session (first 8 characters of `id`) and its date so the
 user can open it with `ccreel resume <id>`.
