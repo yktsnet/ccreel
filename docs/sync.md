@@ -49,6 +49,16 @@ ssh は `~/.ssh/config` の多重化（`ControlMaster`）を使わず、毎回�
 
 push と pull は mirror の `.lock` で排他し、重なったときは待たずに止まる。初回の大きな push の最中に `ccreel` を開いても、待たされない。
 
+## ハブを置いたサーバーで読む
+
+`CCREEL_HUB` が手元のディレクトリのとき、`list`・`find`・`search`・`show`・`outline` は、config dir ごとに `<hub>/<config dir 名>/projects` も読む。
+ハブを置いたサーバーは pull しないので、他の端末の会話はハブにしか無い。スマホから Remote Control でつなぐ Claude Code が、これで全部の端末の会話を引ける。
+
+- 読むときに `"cwd"` の先頭の `~` を手元のホームに戻す。ハブのファイルは書き換えない
+- 手元の config dir とハブの両方にある会話は、手元の方を使う
+- `pick`・`resume` はハブを読まない。resume はセッションのある config dir で claude を起動するので、ハブにしか無い会話は開けない
+- ssh の先のハブ（`host:path`）は読まない。その端末は pull した手元の写しを読む
+
 ## resume するディレクトリ
 
 resume は、記録された cwd へ移ってから claude を起動する。cwd が手元に無いとき（別の端末の worktree など）は、手元にある一番近い祖先のディレクトリで開く。jsonl の中身は書き換えない。

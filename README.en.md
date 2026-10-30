@@ -58,17 +58,23 @@ flowchart TD
 A conversation started on macOS does not show up in `claude --resume` on a Linux machine.
 With ccreel, each machine pushes to the hub every minute and pulls when you open `ccreel`. A run with nothing changed finishes without connecting to the hub, so calling it every minute costs nothing.
 The hub needs no ccreel installed; a VPS, a Raspberry Pi, or a local directory all work.
+Put the hub on a small always-on Linux server, and the same server becomes your entry point from a phone. Run Claude Code there with Remote Control, and the Claude app on your phone can search and read conversations from every machine.
 
 ```mermaid
-flowchart LR
+flowchart TD
   subgraph A["Machine A (macOS)"]
     ca(["claude"])
   end
-  hub[("Hub (VPS etc.)")]
+  subgraph S["Hub server (VPS etc.)"]
+    hub[("Hub")]
+    rc(["claude (Remote Control)"])
+  end
   subgraph B["Machine B (Linux)"]
     fb{{"ccreel (fzf)"}} ==> rb(["claude --resume"])
   end
+  phone(["📱 Claude app"])
   ca -.->|push| hub -.->|pull| fb
+  phone -.-> rc -->|find| hub
 ```
 
 Syncing `projects/` as is does not make a session the same on machines whose home paths differ, because project names and `"cwd"` contain the home path.
@@ -86,6 +92,12 @@ nix profile install github:yktsnet/ccreel
 go install github.com/yktsnet/ccreel/cmd/ccreel@latest    # Go 1.24 or later
 ```
 
+To use it from Claude Code, install the bundled skill (with Nix, it is at `share/ccreel/skills/ccreel`).
+
+```sh
+cp -r skills/ccreel ~/.claude/skills/
+```
+
 On a single machine, just type `ccreel`.
 
 To connect several machines, set the hub on each and call push every minute.
@@ -99,10 +111,16 @@ ccreel push                                 # the first run sends all local hist
 * * * * * CCREEL_HUB=<hub-host>:ccreel-hub ccreel push
 ```
 
-To use it from Claude Code, install the bundled skill (with Nix, it is at `share/ccreel/skills/ccreel`).
+Add one small Linux server, and it can serve as both the hub and the entry point from your phone. Install ccreel and the skill there too, give it the local directory as the hub, and call only push every minute.
+The server does not pull. Instead, read-only commands such as `find`, `search`, and `show` read the hub directly ([docs/sync.md](docs/sync.md), Japanese).
 
 ```sh
-cp -r skills/ccreel ~/.claude/skills/
+export CCREEL_HUB=$HOME/ccreel-hub          # the hub itself, so a local directory
+claude --remote-control                     # connect from the Claude app on your phone
+```
+
+```cron
+* * * * * CCREEL_HUB=$HOME/ccreel-hub ccreel push
 ```
 
 ## Usage
@@ -133,10 +151,11 @@ Options, deciding factors, revisit criteria, and the reasons behind the tech cho
 
 ## Scope
 
-Used on macOS and Linux (including WSL), with two machines and two config dirs.
+Used on macOS and Linux (including WSL), with two machines and two config dirs. The Linux server holding the hub doubles as the entry point from a phone.
 
 - If two machines write the same session at once, the hub keeps the newer one
 - Only the last 30 days are pulled locally; older sessions live only on the hub
+- Sessions only on the hub can be read on the server that holds it, but not resumed
 - Attachments (subagent transcripts, offloaded tool output) are not carried
 - No MCP server, index DB, or LLM-generated titles
 

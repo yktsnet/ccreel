@@ -57,7 +57,7 @@ func ParseQuery(words []string) Query {
 }
 
 type Options struct {
-	ConfigDirs  []string // 探す config dir。先頭が既定のもの
+	ConfigDirs  []string // 探す config dir。先頭が既定のもの。同じ会話は先にある方を使う
 	CurrentRepo string   // 呼ばれたリポ。同じリポの会話に点を足す
 	Exclude     string   // 外すセッション（いま話しているもの）
 	Limit       int
@@ -111,12 +111,19 @@ func Find(q Query, o Options) (Result, error) {
 		o.Now = time.Now()
 	}
 	var all []Candidate
+	// 手元とハブの両方にある会話は、先に並んだ置き場（手元）の方を残す
+	seen := map[string]bool{}
 	for _, dir := range o.ConfigDirs {
 		cs, err := collect(q, o, dir)
 		if err != nil {
 			return res, err
 		}
-		all = append(all, cs...)
+		for _, c := range cs {
+			if !seen[c.ID] {
+				seen[c.ID] = true
+				all = append(all, c)
+			}
+		}
 	}
 	var kept []Candidate
 	for _, c := range all {
