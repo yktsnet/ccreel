@@ -97,6 +97,7 @@ type record struct {
 	Entrypoint  string          `json:"entrypoint"`
 	Timestamp   time.Time       `json:"timestamp"`
 	AITitle     string          `json:"aiTitle"`
+	CustomTitle string          `json:"customTitle"`
 	Message     json.RawMessage `json:"message"`
 }
 
@@ -110,6 +111,7 @@ var wanted = [][]byte{
 	[]byte(`"type":"user"`),
 	[]byte(`"type":"assistant"`),
 	[]byte(`"type":"ai-title"`),
+	[]byte(`"type":"custom-title"`),
 }
 
 func relevant(line []byte) bool {
@@ -141,6 +143,7 @@ func scan(path string, terms []string) (Meta, error) {
 	}
 	var firstCWD string
 	var branch, cwd string
+	var custom string
 	lower := make([]string, len(terms))
 	for i, t := range terms {
 		lower[i] = strings.ToLower(t)
@@ -189,6 +192,8 @@ func scan(path string, terms []string) (Meta, error) {
 		case "ai-title":
 			// 会話が進むと付け直されるので、最後のものを使う
 			m.Title = r.AITitle
+		case "custom-title":
+			custom = r.CustomTitle
 		case "user":
 			if text, ok := promptText(r); ok {
 				m.Prompts++
@@ -217,6 +222,10 @@ func scan(path string, terms []string) (Meta, error) {
 		if fi, err := os.Stat(path); err == nil {
 			m.Updated = fi.ModTime()
 		}
+	}
+	// /rename で付けた名前は、そのあとに付く ai-title より優先する
+	if custom != "" {
+		m.Title = custom
 	}
 	m.Repo = repoName(repoCWD(firstCWD, m.CWD))
 	return m, nil

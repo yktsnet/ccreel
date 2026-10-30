@@ -68,7 +68,7 @@ func TestFindByRepoOnly(t *testing.T) {
 }
 
 func TestTitleOutranksBody(t *testing.T) {
-	// demo は題に parser、other は本文に logs。どちらも片方の語にしか当たらない
+	// demo はタイトルに parser、other は本文に logs。どちらも片方の語にしか当たらない
 	r := find(t, "logs", "parser")
 	if ids(r) != "[11111111 22222222]" {
 		t.Errorf("got %s", ids(r))
@@ -158,6 +158,28 @@ func writeSession(t *testing.T, dir, id, branch, title, body string, n int) {
 	}
 }
 
+func TestFindByCustomTitle(t *testing.T) {
+	dir := t.TempDir()
+	const id = "aaaaaaaa-0000-4000-8000-000000000005"
+	writeSession(t, dir, id, "main", "Greet the user", "hello", 1)
+	p := filepath.Join(dir, "projects", "-home-alice-src-app", id+".jsonl")
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintln(f, `{"type":"custom-title","customTitle":"login rework"}`)
+	f.Close()
+
+	r, err := Find(ParseQuery([]string{"login"}), Options{ConfigDirs: []string{dir}, Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Candidates) != 1 || r.Candidates[0].Title != "login rework" ||
+		fmt.Sprint(r.Candidates[0].Reasons) != "[title:login]" {
+		t.Errorf("got %+v", r.Candidates)
+	}
+}
+
 func TestRanking(t *testing.T) {
 	dir := t.TempDir()
 	const (
@@ -169,7 +191,7 @@ func TestRanking(t *testing.T) {
 	// Issue の作業をしたセッションは、番号を本文で何度も口にしただけのセッションより上
 	writeSession(t, dir, onBranch, "task/42-fix-login", "", "done", 1)
 	writeSession(t, dir, mentions, "main", "", "see issue 42 again", 40)
-	// 題に語があるセッションは、本文で語をくり返しただけのセッションより上
+	// タイトルに語があるセッションは、本文で語をくり返しただけのセッションより上
 	writeSession(t, dir, titled, "main", "Router rewrite", "router", 1)
 	writeSession(t, dir, wordy, "main", "", "router router", 40)
 

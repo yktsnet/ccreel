@@ -4,8 +4,8 @@
 // 分岐は LLM に判断させず、ここで決め打ちにする。
 //
 //	parse  言葉を @リポ・#番号・語に分ける
-//	collect 全部の config dir から、番号・題・本文のどれかに当たるセッションを rg で集める
-//	score  Issue 番号の一致 > 題の一致 > 本文の一致、に同じリポと新しさを足して点を付ける
+//	collect 全部の config dir から、番号・タイトル・本文のどれかに当たるセッションを rg で集める
+//	score  Issue 番号の一致 > タイトルの一致 > 本文の一致、に同じリポと新しさを足して点を付ける
 //	decide 1位が2位より十分に上なら決まり、そうでなければ候補を並べて聞く
 package finder
 
@@ -209,8 +209,8 @@ func collect(q Query, o Options, configDir string) ([]Candidate, error) {
 			found[p] = true
 			prelim[p] += bodyScore(n)
 		}
-		// 題は jsonl の ai-title の行にある。付け直された古い題にも当たるが、仮の順位には足りる
-		titles, err := count(root, `"aiTitle":"[^"]*`+regexp.QuoteMeta(t), false)
+		// タイトルは jsonl の ai-title と custom-title の行にある。付け直された古いタイトルにも当たるが、仮の順位には足りる
+		titles, err := count(root, `"(aiTitle|customTitle)":"[^"]*`+regexp.QuoteMeta(t), false)
 		if err != nil {
 			return nil, err
 		}

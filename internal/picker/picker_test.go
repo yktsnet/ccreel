@@ -14,7 +14,7 @@ func TestLine(t *testing.T) {
 	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.Local)
 	m := session.Meta{ID: "11111111-aaaa", Repo: "demo", Issue: "417", FirstPrompt: "fix\nthe  parser", Updated: now.Add(-time.Hour)}
 	cols := strings.Split(Line(m, now), "\t")
-	// 題を先頭に、@リポ #番号 と日は後ろに薄く出す
+	// タイトルを先頭に、@リポ #番号 と日は後ろに薄く出す
 	if len(cols) != 5 || cols[0] != "11111111-aaaa" || cols[1] != "fix the parser" ||
 		cols[2] != dim+"@demo #417"+reset || cols[3] != dim+"*0"+reset || cols[4] != dim+"1h"+reset {
 		t.Errorf("Line = %q", cols)

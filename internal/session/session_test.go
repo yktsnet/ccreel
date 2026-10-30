@@ -126,6 +126,24 @@ func TestScanAllSkipsHeadless(t *testing.T) {
 	}
 }
 
+func TestScanPrefersCustomTitle(t *testing.T) {
+	dir := t.TempDir()
+	// /rename のあとにも ai-title は付け直される
+	p := writeSession(t, dir, "-src-a", "aaaaaaaa-0000-4000-8000-000000000003", time.Now(),
+		userLine("/src/a", "2026-03-01T09:00:00Z", "hello", ""),
+		`{"type":"ai-title","aiTitle":"Greet the user"}`,
+		`{"type":"custom-title","customTitle":"old name"}`,
+		`{"type":"custom-title","customTitle":"login rework"}`,
+		`{"type":"ai-title","aiTitle":"Say hello again"}`)
+	m, err := Scan(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Title != "login rework" {
+		t.Errorf("Title = %q, want %q", m.Title, "login rework")
+	}
+}
+
 func TestSameUUIDInTwoProjects(t *testing.T) {
 	dir := t.TempDir()
 	id := "bbbbbbbb-0000-4000-8000-000000000001"

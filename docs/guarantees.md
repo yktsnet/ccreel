@@ -33,13 +33,13 @@
 ### 2. `internal/finder/finder_test.go` — internal/finder (ParseQuery / Find)
 
 - `ParseQuery` は `@名前` をリポの指定、`#12` と `12` を Issue 番号として読み、番号は本文の語としても残す
-- `Find` は、題と本文に語が当たったセッションを返し、当たった理由（`title:語`、`body:語×数`）を添える。本文の数は、人の発言と応答の文章のうち語を含むものの数である。ツールの呼び出しと出力にしか無い語では本文に当たらない
+- `Find` は、タイトル（`/rename` で付けた名前を含む）と本文に語が当たったセッションを返し、当たった理由（`title:語`、`body:語×数`）を添える。本文の数は人の発言と応答の文章のうち語を含むものの数である。ツールの呼び出しと出力にしか無い語では本文に当たらない
 - `Find` は、ブランチか worktree の名前の Issue 番号が一致するセッションを返し、理由の先頭に `issue #番号` を置く
 - `Find` は、`@リポ` だけを渡すと、そのリポのセッションだけを返す
 - `Find` は、`@リポ` を読む本数の上限（40本）に絞る前に当てる。他のリポに、仮の点がそのリポのセッションより高いセッションが上限より多くあっても、そのリポのセッションを返す
 - `Find` は、`Exclude` に渡したセッションも、読む本数の上限に絞る前に外す。外したセッションは読む本数に数えない
 - `Find` は、同じ履歴と同じ言葉に対して、毎回同じ候補を同じ順で返す
-- `Find` は、題に語があるセッションを、本文で語をくり返しただけのセッションより上に置く
+- `Find` は、タイトルに語があるセッションを、本文で語をくり返しただけのセッションより上に置く
 - `Find` は、Issue の作業をしたセッション（ブランチ・worktree の番号が一致）を、本文で番号をくり返しただけのセッションより上に置く
 - `Find` は、`Exclude` に渡したセッション（いま話しているもの）を返さない
 - `Find` は、語も番号もリポも無ければ `ErrEmpty` を返す
@@ -48,14 +48,14 @@
 | 保証（要約） | 対応テスト |
 |---|---|
 | `@`・`#`・語の読み分け | `TestParseQuery` |
-| 題と本文で探して理由を返す | `TestFindByTitleAndBody` |
+| タイトルと本文で探して理由を返す | `TestFindByTitleAndBody`, `TestFindByCustomTitle` |
 | Issue 番号で探す | `TestFindByIssue` |
 | `@リポ` だけで絞る | `TestFindByRepoOnly` |
 | `@リポ` を上限の前に当てる | `TestRepoIsAppliedBeforeTheReadLimit` |
 | `Exclude` のセッションを上限の前に外す | `TestExcludeIsAppliedBeforeTheReadLimit` |
 | 毎回同じ候補と同じ順序 | `TestFindIsDeterministic` |
 | ツールの入出力では本文に当たらない | `TestBodyIgnoresToolOutput` |
-| 題の一致が本文のくり返しより上 | `TestTitleOutranksBody`, `TestRanking` |
+| タイトルの一致が本文のくり返しより上 | `TestTitleOutranksBody`, `TestRanking` |
 | Issue の一致が本文の番号より上 | `TestRanking` |
 | いまのセッションを外す | `TestExcludeCurrent` |
 | 空の問い合わせ | `TestEmptyQuery` |
@@ -115,7 +115,7 @@
 
 ### 5. `internal/picker/picker_test.go` — internal/picker (Line / Ago / ResumeDir / selectedIDs)
 
-- `Line` は fzf の1行を「UUID・題・`@リポ #番号`・更新日・24時間以内の経過時間」のタブ区切りで作り、題より後ろは薄い色で出す。題が無ければ最初の発言を1行にして題の代わりに使う
+- `Line` は fzf の1行を「UUID・タイトル・`@リポ #番号`・更新日・24時間以内の経過時間」のタブ区切りで作り、タイトルより後ろは薄い色で出す。タイトルが無ければ最初の発言を1行にしてタイトルの代わりに使う
 - `Ago` は、更新からの経過時間を24時間で割って切り捨てた値を日数とし、9日（216〜240時間前）までは `*` に続けて日数を、それより前は週（`2w`）を返す。日付をまたいでも、24時間以内なら `*0` になる
 - `Elapsed` は、24時間以内（`*0`）のものにだけ経過時間を返す。1分未満は `now`、60分未満は分（`12m`）、それ以上は時間（`23h`）で、24時間を過ぎたものは空にする
 - `ResumeDir` は、記録された cwd があればそこを、無ければ手元にある一番近い祖先を返す。祖先がホームそのもの、またはホームより上になるとき、および cwd が空のときは、ホームを返す
@@ -146,7 +146,8 @@
 ### 7. `internal/session/session_test.go` — internal/session (Discover / Scan / ScanAllTerms)
 
 - 一覧に出すのは projects 直下のセッションだけで、`<uuid>/subagents/` などの付属物は出さない
-- 一覧の1行は、題（最後に付け直されたもの）・最初の発言（スラッシュコマンドは打った形）・最後の cwd・リポ・ブランチ・Issue 番号・発言の数・最初と最後の時刻を持つ。発言の数に、`isMeta`・`tool_result`・サブエージェントの発言は入れない
+- 一覧の1行は、タイトル・最初の発言（スラッシュコマンドは打った形）・最後の cwd・リポ・ブランチ・Issue 番号・発言の数・最初と最後の時刻を持つ。発言の数に、`isMeta`・`tool_result`・サブエージェントの発言は入れない
+- タイトルは `/rename` で付けた名前があればその最後のものにし、無ければ Claude Code が付けたタイトルの最後のものにする。`/rename` のあとに Claude Code がタイトルを付け直しても、付けた名前を使う
 - Issue 番号は、セッションの途中で Issue のブランチか worktree にいれば、最後に main へ戻っていても残す。複数あれば最後に現れたものにする
 - `ScanAllTerms` は、語ごとに、人の発言と応答の文章のうちその語を含むものの数を数える。ツールの呼び出しと出力・添付・サブエージェント側の応答は数えない
 - 一覧は新しい順に並び、発言の無いセッションと、`claude -p` で動かしたセッション（`entrypoint` が `sdk-cli`）は出さない
@@ -158,6 +159,7 @@
 |---|---|
 | 付属物を出さない | `TestDiscoverSkipsAttachments` |
 | 一覧の1行の中身 | `TestScan` |
+| `/rename` の名前をタイトルにする | `TestScanPrefersCustomTitle` |
 | 新しい順・発言の無いものを出さない | `TestScanAllOrderAndEmpty` |
 | リポ名と Issue 番号の取り方 | `TestRepoNameAndIssue` |
 | `claude -p` のセッションを出さない | `TestScanAllSkipsHeadless` |
@@ -191,7 +193,7 @@
 - `pick` で複数を選ぶと、tmux の中では2本目から `tmux new-window` で、そのセッションの config dir を `CLAUDE_CONFIG_DIR` にして開き、1本目はいまのプロセスで開く
 - `outline --json` の項目は `turn`・`time`・`prompt`・`reply`・`tools`、`search --json` の項目は `id`・`repo`・`title`・`updated`・`turn`・`kind`・`snippet` である
 - `push` は、送らなかった回に stdout にも stderr にも何も出さない
-- `preview` は、題・`@リポ`・`#番号`・ブランチを先頭にまとめ、その下に新しいターンから順に、発言と最終応答を Markdown で並べる
+- `preview` は、タイトル・`@リポ`・`#番号`・ブランチを先頭にまとめ、その下に新しいターンから順に、発言と最終応答を Markdown で並べる
 - `CCREEL_HUB` が手元のディレクトリなら、`list`・`search`・`show`・`find` はハブにしか無いセッションも読み、cwd の先頭の `~` を手元のホームに戻す。`resume` はハブにしか無いセッションを開かない
 - 手元の config dir とハブの両方にあるセッションは、`list`・`search` で1本として扱い、`show` は失敗せず、`find` は手元の config dir の候補だけを返す
 - `CCREEL_HUB` が ssh の先（`host:path`）なら、ハブを読まない
