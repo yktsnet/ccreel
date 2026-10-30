@@ -4,19 +4,20 @@
 
 [![CI](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml)
 
-A CLI for people who use Claude Code on more than one machine. It gathers session history into a hub, a store reachable over ssh, so you can find and resume any session from any machine.
-The same search serves two cases: you browsing with fzf to find and resume a session quickly, and Claude Code pulling up the right conversation when you ask it to.
-On a single machine, it still works as a list you can narrow with `@repo` and `#issue`, and Claude Code can read your history through it.
+A CLI that lists your past Claude Code conversations from every repo in one place and resumes the one you pick with Enter.
+Claude Code itself can run the same search once and get the right conversation.
+Add a hub, a store reachable over ssh, and conversations from your other machines join the same list.
 
 ![demo: narrow conversations across all repos with @app #417, then press Enter to resume](demo/demo.gif)
 
 ## Why
 
-### You search: every machine's and every repo's conversations in one list
+### You search: pick one and resume it right away
 
-Type `ccreel` and fzf lists sessions from every machine and every config dir, newest first.
-Narrow by repo with `@app`, by issue number with `#417`, or to the last 24 hours with `*0`. Conversations held in a worktree are grouped under the original repo, and the issue number comes from the branch or worktree name.
-Enter moves to the directory where the conversation started and resumes it. Select several with Tab, and the second one onward opens in new tmux windows.
+Type `ccreel` and sessions from every repo and every config dir are listed one per line, newest first. fzf opens full screen, and the right pane shows the conversation under the cursor.
+What you type narrows the list as you go. Narrow by repo with `@app`, by issue number with `#417`, or to the last 24 hours with `*0`, and combine them freely.
+Conversations held in a worktree are grouped under the original repo. The issue number comes from the branch or worktree name, so `#417` finds the work if you put the number in that name.
+Enter moves to the directory the conversation was last working in and resumes it. Select several with Tab, and the second one onward opens in new tmux windows.
 
 ### Claude Code searches: the right conversation, or candidates, in one call
 
@@ -81,6 +82,14 @@ Syncing `projects/` as is does not make a session the same on machines whose hom
 On the ccreel hub, the home prefix in project names and in `"cwd"` is replaced with `~`. Whether sent from `/Users/alice` on macOS or `/home/alice` on Linux, the same session becomes the same bytes, and the pulling machine maps it back to its own home.
 
 How it works is in [docs/sync.md](docs/sync.md) (Japanese).
+
+## How it differs from similar tools
+
+- **Claude Code's `/resume`**: each session takes two lines, and you only see a conversation's content after switching to the preview. By default it shows only sessions from the current directory, and it does not span config dirs or machines
+- **Tools for reading conversations** (such as [claude-history](https://github.com/raine/claude-history)): picking a session opens a viewer, and resuming is a separate key. For Claude Code they return a scored ranking and leave the choice of what to read to Claude Code
+- **Tools that sync sessions between machines**: they carry sessions over so the built-in `/resume` can show them, but do not search
+
+ccreel focuses on resuming right after you pick, and on handing Claude Code a result already narrowed to one conversation. For reading part of a conversation closely and quoting it, a tool built for reading is the better fit.
 
 ## Quick Start
 

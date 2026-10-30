@@ -4,19 +4,20 @@
 
 [![CI](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml)
 
-Claude Code を複数の端末で使う人のための CLI。セッション履歴を ssh でつながる置き場（ハブ）に集め、どの端末からでも探して resume できる。
-人が fzf で手早く探して resume する場面と、Claude Code に頼んで正しい会話をすぐ引かせる場面の両方に、同じ検索を使う。
-端末が1台でも、`@リポ`・`#Issue番号` で絞れる一覧として使え、Claude Code からも履歴を読める。
+Claude Code の過去の会話を、全部のリポから1つの一覧で探し、Enter ですぐ resume する CLI。
+Claude Code 自身も同じ検索を1回呼ぶだけで正しい会話を引ける。
+ssh でつながる置き場（ハブ）を足せば、ほかの端末の会話も同じ一覧に並ぶ。
 
 ![demo: 全部のリポの会話から @app #417 で絞り込み、Enter で resume する](demo/demo.gif)
 
 ## Why
 
-### 人が探す: 全部の端末とリポの会話を、1つの一覧から
+### 人が探す: 選んですぐ resume する
 
-`ccreel` を打つと、全部の端末・全部の config dir のセッションが新しい順に fzf に並ぶ。
-`@app` でリポ、`#417` で Issue 番号、`*0` で直近24時間のものに絞れる。worktree で作業した会話も元のリポにまとまり、Issue 番号はブランチ名か worktree の名前から取る。
-Enter で、その会話を始めたディレクトリへ移って resume する。Tab で複数を選ぶと、2本目からは tmux の新しいウィンドウで開く。
+`ccreel` と打つと、全部のリポ・全部の config dir のセッションが1行に1本ずつ新しい順に並ぶ。fzf は全画面で開き、右のペインには選んでいる会話の中身を出す。
+打った文字がそのまま絞り込みになる。`@app` でリポ、`#417` で Issue 番号、`*0` で直近24時間のものに絞れ、組み合わせてもよい。
+worktree で作業した会話も元のリポにまとまる。Issue 番号はブランチ名か worktree の名前から取るので、番号を名前に入れて作業していれば `#417` で引ける。
+Enter で、その会話で最後に作業していたディレクトリへ移って resume する。Tab で複数を選ぶと、2本目からは tmux の新しいウィンドウで開く。
 
 ### Claude Code が探す: 1回の呼び出しで、正しい会話か候補か
 
@@ -81,6 +82,14 @@ flowchart TD
 ccreel のハブでは、プロジェクト名と `"cwd"` の先頭のホームを `~` に置き換えて持つ。macOS の `/Users/alice` と Linux の `/home/alice` のどちらから送っても同じセッションは同じバイト列になり、pull した端末では自分のホームへ戻す。
 
 仕組みは [docs/sync.md](docs/sync.md) にある。
+
+## 似た道具との違い
+
+- **Claude Code の `/resume`**: 1本に2行を使い、会話の中身はプレビューに切り替えないと見えない。既定ではいまのディレクトリのセッションだけを出し、config dir と端末はまたがない
+- **会話を読むための道具**（[claude-history](https://github.com/raine/claude-history) など）: 選ぶと会話を読む画面が開き、resume は別のキーで行う。Claude Code にも点数つきの順位を返すが、どれを読むかは Claude Code に委ねる
+- **端末のあいだで同期する道具**: 会話を運んで標準の `/resume` に出す。探す機能は無い
+
+ccreel は選んだらすぐ resume することと、Claude Code に1本へ決め切った結果を返すことに絞っている。会話の一部を細かく読んで引用する用途には、会話を読むための道具が向いている。
 
 ## Quick Start
 
