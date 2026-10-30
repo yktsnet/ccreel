@@ -33,7 +33,7 @@
 ### 2. `internal/finder/finder_test.go` — internal/finder (ParseQuery / Find)
 
 - `ParseQuery` は `@名前` をリポの指定、`#12` と `12` を Issue 番号として読み、番号は本文の語としても残す
-- `Find` は、題と本文に語が当たったセッションを返し、当たった理由（`title:語`、`body:語×数`）を添える。本文の数は、人の発言と応答の文章のうち語を含むものの数である。ツールの呼び出しと出力にしか無い語では本文に当たらない
+- `Find` は、題（`/rename` で付けた名前を含む）と本文に語が当たったセッションを返し、当たった理由（`title:語`、`body:語×数`）を添える。本文の数は人の発言と応答の文章のうち語を含むものの数である。ツールの呼び出しと出力にしか無い語では本文に当たらない
 - `Find` は、ブランチか worktree の名前の Issue 番号が一致するセッションを返し、理由の先頭に `issue #番号` を置く
 - `Find` は、`@リポ` だけを渡すと、そのリポのセッションだけを返す
 - `Find` は、`@リポ` を読む本数の上限（40本）に絞る前に当てる。他のリポに、仮の点がそのリポのセッションより高いセッションが上限より多くあっても、そのリポのセッションを返す
@@ -48,7 +48,7 @@
 | 保証（要約） | 対応テスト |
 |---|---|
 | `@`・`#`・語の読み分け | `TestParseQuery` |
-| 題と本文で探して理由を返す | `TestFindByTitleAndBody` |
+| 題と本文で探して理由を返す | `TestFindByTitleAndBody`, `TestFindByCustomTitle` |
 | Issue 番号で探す | `TestFindByIssue` |
 | `@リポ` だけで絞る | `TestFindByRepoOnly` |
 | `@リポ` を上限の前に当てる | `TestRepoIsAppliedBeforeTheReadLimit` |
@@ -147,6 +147,7 @@
 
 - 一覧に出すのは projects 直下のセッションだけで、`<uuid>/subagents/` などの付属物は出さない
 - 一覧の1行は、題（最後に付け直されたもの）・最初の発言（スラッシュコマンドは打った形）・最後の cwd・リポ・ブランチ・Issue 番号・発言の数・最初と最後の時刻を持つ。発言の数に、`isMeta`・`tool_result`・サブエージェントの発言は入れない
+- 題は `/rename` で付けた名前があればその最後のものにし、無ければ Claude Code が付けた題の最後のものにする。`/rename` のあとに Claude Code が題を付け直しても、付けた名前を使う
 - Issue 番号は、セッションの途中で Issue のブランチか worktree にいれば、最後に main へ戻っていても残す。複数あれば最後に現れたものにする
 - `ScanAllTerms` は、語ごとに、人の発言と応答の文章のうちその語を含むものの数を数える。ツールの呼び出しと出力・添付・サブエージェント側の応答は数えない
 - 一覧は新しい順に並び、発言の無いセッションと、`claude -p` で動かしたセッション（`entrypoint` が `sdk-cli`）は出さない
@@ -158,6 +159,7 @@
 |---|---|
 | 付属物を出さない | `TestDiscoverSkipsAttachments` |
 | 一覧の1行の中身 | `TestScan` |
+| `/rename` の名前を題にする | `TestScanPrefersCustomTitle` |
 | 新しい順・発言の無いものを出さない | `TestScanAllOrderAndEmpty` |
 | リポ名と Issue 番号の取り方 | `TestRepoNameAndIssue` |
 | `claude -p` のセッションを出さない | `TestScanAllSkipsHeadless` |

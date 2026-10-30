@@ -158,6 +158,28 @@ func writeSession(t *testing.T, dir, id, branch, title, body string, n int) {
 	}
 }
 
+func TestFindByCustomTitle(t *testing.T) {
+	dir := t.TempDir()
+	const id = "aaaaaaaa-0000-4000-8000-000000000005"
+	writeSession(t, dir, id, "main", "Greet the user", "hello", 1)
+	p := filepath.Join(dir, "projects", "-home-alice-src-app", id+".jsonl")
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintln(f, `{"type":"custom-title","customTitle":"login rework"}`)
+	f.Close()
+
+	r, err := Find(ParseQuery([]string{"login"}), Options{ConfigDirs: []string{dir}, Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Candidates) != 1 || r.Candidates[0].Title != "login rework" ||
+		fmt.Sprint(r.Candidates[0].Reasons) != "[title:login]" {
+		t.Errorf("got %+v", r.Candidates)
+	}
+}
+
 func TestRanking(t *testing.T) {
 	dir := t.TempDir()
 	const (

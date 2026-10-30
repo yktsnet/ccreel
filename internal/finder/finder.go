@@ -209,8 +209,8 @@ func collect(q Query, o Options, configDir string) ([]Candidate, error) {
 			found[p] = true
 			prelim[p] += bodyScore(n)
 		}
-		// 題は jsonl の ai-title の行にある。付け直された古い題にも当たるが、仮の順位には足りる
-		titles, err := count(root, `"aiTitle":"[^"]*`+regexp.QuoteMeta(t), false)
+		// 題は jsonl の ai-title と custom-title の行にある。付け直された古い題にも当たるが、仮の順位には足りる
+		titles, err := count(root, `"(aiTitle|customTitle)":"[^"]*`+regexp.QuoteMeta(t), false)
 		if err != nil {
 			return nil, err
 		}
