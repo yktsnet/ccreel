@@ -68,7 +68,7 @@ func TestFindByRepoOnly(t *testing.T) {
 }
 
 func TestTitleOutranksBody(t *testing.T) {
-	// demo は題に parser、other は本文に logs。どちらも片方の語にしか当たらない
+	// demo はタイトルに parser、other は本文に logs。どちらも片方の語にしか当たらない
 	r := find(t, "logs", "parser")
 	if ids(r) != "[11111111 22222222]" {
 		t.Errorf("got %s", ids(r))
@@ -191,7 +191,7 @@ func TestRanking(t *testing.T) {
 	// Issue の作業をしたセッションは、番号を本文で何度も口にしただけのセッションより上
 	writeSession(t, dir, onBranch, "task/42-fix-login", "", "done", 1)
 	writeSession(t, dir, mentions, "main", "", "see issue 42 again", 40)
-	// 題に語があるセッションは、本文で語をくり返しただけのセッションより上
+	// タイトルに語があるセッションは、本文で語をくり返しただけのセッションより上
 	writeSession(t, dir, titled, "main", "Router rewrite", "router", 1)
 	writeSession(t, dir, wordy, "main", "", "router router", 40)
 

@@ -130,7 +130,7 @@ func main() {
 	}
 }
 
-// uuid は題から UUID の形の ID を作る。撮り直しても同じ ID になる
+// uuid はタイトルから UUID の形の ID を作る。撮り直しても同じ ID になる
 func uuid(title string) string {
 	h := sha256.Sum256([]byte(title))
 	x := fmt.Sprintf("%x", h[:16])

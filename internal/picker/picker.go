@@ -20,9 +20,9 @@ const (
 	reset = "\x1b[0m"
 )
 
-// Line は fzf に渡す1行で、列は「UUID・題・@リポ #番号・いつ・24時間以内の経過」。UUID は画面に出さず、選ばれた行から ID を取り出すのに使う。
-// 狭いペインでもまず題が見えるよう題を先頭に置き、リポと日時は後ろに薄く出す。
-// fzf の中で @リポ・#番号 と打てば、その語にだけ当たる。題の中の同じ言葉と混ざらない
+// Line は fzf に渡す1行で、列は「UUID・タイトル・@リポ #番号・いつ・24時間以内の経過」。UUID は画面に出さず、選ばれた行から ID を取り出すのに使う。
+// 狭いペインでもまずタイトルが見えるようタイトルを先頭に置き、リポと日時は後ろに薄く出す。
+// fzf の中で @リポ・#番号 と打てば、その語にだけ当たる。タイトルの中の同じ言葉と混ざらない
 func Line(m session.Meta, now time.Time) string {
 	title := m.Title
 	if title == "" {
@@ -99,7 +99,7 @@ func Pick(metas []session.Meta, o Options) ([]string, error) {
 		"--delimiter", "\t", "--with-nth", "2..", "--nth", "1..3", "--no-sort", "--ansi", "--tabstop", "2", "--multi",
 		// 全画面で開く。--height の表示は閉じたあとも描いたものが残り、resume した claude の画面と重なる
 		"--layout", "reverse", "--no-height",
-		// 幅が足りない端末では、題を切らないようにプレビューを下へ回す。fzf の <N は端末ではなくプレビュー欄の幅で比べる
+		// 幅が足りない端末では、タイトルを切らないようにプレビューを下へ回す。fzf の <N は端末ではなくプレビュー欄の幅で比べる
 		"--preview", preview, "--preview-window", "right,55%,wrap,<60(down,45%,wrap)",
 		"--bind", "ctrl-/:toggle-preview",
 		"--header", "enter: resume · tab: select several (tmux windows) · ctrl-/: preview · narrow with @repo #issue *0 (last 24h) *1 …",
