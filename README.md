@@ -76,6 +76,25 @@ ccreel のハブでは、プロジェクト名と `"cwd"` の先頭のホーム�
 
 仕組みは [docs/sync.md](docs/sync.md) にある。
 
+### スマホから: 小さな Linux サーバー1台でハブと窓口を兼ねる
+
+ハブを常時動く小さな Linux サーバーに置くと、同じサーバーをスマホからの窓口にも使える。サーバーで Claude Code を Remote Control で動かし、スマホの Claude アプリからつなぐ。
+ハブを置いたサーバーでは、`CCREEL_HUB` に手元のディレクトリを渡す。こうすると、`find`・`search`・`show` などの読むだけのコマンドが、config dir に加えてハブも直に読む。
+スマホから「前に話したあの件」と頼むと、Mac や Linux の端末で話した会話まで引ける。
+
+```mermaid
+flowchart LR
+  A(["端末 A"]) -.->|push| hub
+  B(["端末 B"]) -.->|push| hub
+  subgraph S["小さな Linux サーバー"]
+    hub[("ハブ")]
+    rc(["claude（Remote Control）<br/>+ skill"]) -->|find / show| hub
+  end
+  phone(["📱 Claude アプリ"]) --> rc
+```
+
+サーバーは pull しない。pull すると、他の端末の会話がサーバーの `/resume` の一覧に混ざる。読むだけなら、ハブを直に読めば足りる。
+
 ## Quick Start
 
 手元の端末に `claude`・`fzf`・`rg`・`rsync`・`ssh` が要る（Nix で入れれば一緒に入る）。ハブには、ssh の鍵認証でログインでき、`rsync`・`sh`・`find`・`stat` があれば足りる。
@@ -97,6 +116,12 @@ ccreel push                                 # 初回は手元の履歴を全部�
 
 ```cron
 * * * * * CCREEL_HUB=<hub-host>:ccreel-hub ccreel push
+```
+
+ハブを置いたサーバーでもセッションを書くなら、そのサーバーでは手元のディレクトリを宛先にして push だけを呼ぶ。
+
+```cron
+* * * * * CCREEL_HUB=$HOME/ccreel-hub ccreel push
 ```
 
 Claude Code から使うには、同梱の skill を入れる（Nix で入れた場合は `share/ccreel/skills/ccreel` にある）。
@@ -133,10 +158,11 @@ fzf の操作・JSON の項目・環境変数・フラグは [docs/usage.md](doc
 
 ## Scope
 
-macOS と Linux（WSL を含む）で、2台の端末と2つの config dir で使っている。
+macOS と Linux（WSL を含む）で、2台の端末と2つの config dir で使っている。ハブを置いた Linux サーバーは、スマホからの窓口も兼ねている。
 
 - 同じセッションを2台で同時に書くと、ハブでは更新の新しい方が残る
 - 手元へ pull するのは直近30日まで。それより古いセッションはハブにだけある
+- ハブにしか無いセッションは、ハブを置いたサーバーで読めるが、resume はできない
 - 付属物（サブエージェントの記録・退避したツール出力）は運ばない
 - MCP サーバ・索引 DB・LLM による題の生成は持たない
 

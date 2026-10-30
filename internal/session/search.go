@@ -70,11 +70,15 @@ func Search(paths []string, query string, opt SearchOptions) ([]Hit, error) {
 	lq := strings.ToLower(query)
 	var hits []Hit
 	// 件数の上限で早く止められるよう、全件を Scan せず mtime の新しい順に1本ずつ読む
+	// 同じ UUID が複数の置き場にあるとき（手元とハブ、移る前と後のプロジェクト）は、新しい方の1本だけを読む。
+	// ハブの写しは元と同じ更新日時を持つので、同じなら先に渡された方（手元）が残る
+	seen := map[string]bool{}
 	for _, p := range byMtime(paths) {
 		m, err := Scan(p)
-		if err != nil || m.Prompts == 0 || (opt.Filter != nil && !opt.Filter(m)) {
+		if err != nil || m.Prompts == 0 || seen[m.ID] || (opt.Filter != nil && !opt.Filter(m)) {
 			continue
 		}
+		seen[m.ID] = true
 		turns, err := ReadTurns(m.Path)
 		if err != nil {
 			continue
@@ -124,7 +128,7 @@ func byMtime(paths []string) []string {
 			ps = append(ps, pm{p, fi.ModTime().UnixNano()})
 		}
 	}
-	sort.Slice(ps, func(i, j int) bool { return ps[i].mod > ps[j].mod })
+	sort.SliceStable(ps, func(i, j int) bool { return ps[i].mod > ps[j].mod })
 	out := make([]string, len(ps))
 	for i, p := range ps {
 		out[i] = p.path

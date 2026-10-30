@@ -343,3 +343,134 @@ func TestListAndSearchLookInEveryConfigDir(t *testing.T) {
 		t.Errorf("search = %q, stderr = %q", out.String(), errw.String())
 	}
 }
+
+// localHub は手元のディレクトリをハブにし、別の端末から push された形のセッションを1本置く。
+// プロジェクト名と cwd の先頭のホームは "~" の形で持つ。
+func localHub(t *testing.T, configName, id, prompt string) string {
+	t.Helper()
+	hub := t.TempDir()
+	p := filepath.Join(hub, configName, "projects", "~-src-hub-app", id+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"type":"user","message":{"role":"user","content":` + jsonString(prompt) +
+		`},"timestamp":"2026-03-05T09:00:00Z","cwd":"~/src/hub-app"}` + "\n"
+	if err := os.WriteFile(p, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return hub
+}
+
+const hubOnlyID = "cccccccc-0000-4000-8000-000000000001"
+
+func TestReadCommandsLookInLocalHub(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	t.Setenv("CCREEL_HUB", localHub(t, "testdata", hubOnlyID, "plan the hub reader"))
+
+	var out, errw bytes.Buffer
+	if err := runList([]string{"--all", "--json"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	var m struct{ ID, CWD, Repo string }
+	for _, l := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		if strings.Contains(l, hubOnlyID) {
+			if err := json.Unmarshal([]byte(l), &m); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if m.CWD != home+"/src/hub-app" || m.Repo != "hub-app" {
+		t.Errorf("list row from hub = %+v, want cwd under %s and repo hub-app", m, home)
+	}
+
+	out.Reset()
+	if err := runSearch([]string{"hub reader", "--json"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), hubOnlyID) {
+		t.Errorf("search = %q", out.String())
+	}
+
+	out.Reset()
+	if err := runShow([]string{"cccccccc", "--json"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "plan the hub reader") {
+		t.Errorf("show = %q", out.String())
+	}
+
+	out.Reset()
+	if err := runFind([]string{"reader", "--json"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), hubOnlyID) {
+		t.Errorf("find = %q", out.String())
+	}
+
+	// resume は claude を config dir で起動するので、ハブにしか無い会話は開かない
+	if err := runResume([]string{"cccccccc"}, &out, &errw); err == nil {
+		t.Error("resume opened a session that is only on the hub")
+	}
+}
+
+func TestLocalCopyWinsOverHub(t *testing.T) {
+	work, _ := secondConfigDir(t)
+	t.Setenv("CLAUDE_CONFIG_DIR", work)
+	// 手元にある会話がハブにも届いている
+	t.Setenv("CCREEL_HUB", localHub(t, "work", otherID, "tune the parser for the work app"))
+
+	var out, errw bytes.Buffer
+	if err := runList([]string{"--all", "--json"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	if n := linesWith(out.String(), otherID); n != 1 {
+		t.Errorf("list shows the session %d times", n)
+	}
+	out.Reset()
+	if err := runSearch([]string{"work app", "--json", "--per-session", "0"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	if n := linesWith(out.String(), otherID); n != 1 {
+		t.Errorf("search hit the session %d times: %q", n, out.String())
+	}
+	out.Reset()
+	if err := runShow([]string{"bbbbbbbb", "--json"}, &out, &errw); err != nil {
+		t.Fatalf("show: %v", err)
+	}
+	out.Reset()
+	if err := runFind([]string{"parser", "--json"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	var res finder.Result
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	var dirs []string
+	for _, c := range res.Candidates {
+		if c.ID == otherID {
+			dirs = append(dirs, c.ConfigDir)
+		}
+	}
+	if len(dirs) != 1 || dirs[0] != work {
+		t.Errorf("find returned the session from %v, want only %s", dirs, work)
+	}
+}
+
+func TestRemoteHubIsNotRead(t *testing.T) {
+	t.Setenv("CCREEL_HUB", "hub-host:ccreel-hub")
+	if d := hubDirs([]string{"/x/.claude"}); d != nil {
+		t.Errorf("hubDirs = %v for an ssh hub", d)
+	}
+}
+
+func linesWith(s, sub string) int {
+	n := 0
+	for _, l := range strings.Split(s, "\n") {
+		if strings.Contains(l, sub) {
+			n++
+		}
+	}
+	return n
+}

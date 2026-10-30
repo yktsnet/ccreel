@@ -36,6 +36,7 @@ Commands:
 
 <id> may be any unique prefix of the session UUID.
 The hub is an rsync destination such as host:path, given by --hub or CCREEL_HUB.
+When CCREEL_HUB is a local directory (on the hub itself), list, find, search, show and outline also read the hub.
 Arguments after -- in pick and resume are passed to claude.
 CCREEL_CONFIG_DIRS (colon-separated) adds config dirs that every command except push and pull also looks in.
 list and pick hide sessions with a single prompt; --all shows them.
@@ -188,7 +189,7 @@ func runList(args []string, w, _ io.Writer) error {
 	if err != nil {
 		return err
 	}
-	paths, err := discoverAll(configDirs(c.configDir))
+	paths, err := discoverAll(readDirs(c.configDir))
 	if err != nil {
 		return err
 	}
@@ -233,7 +234,7 @@ func runShow(args []string, w, errw io.Writer) error {
 	if err != nil {
 		return err
 	}
-	path, _, err := findSession(c.configDir, id)
+	path, _, err := findSession(c.configDir, id, true)
 	if err != nil {
 		return err
 	}
@@ -353,7 +354,7 @@ func runOutline(args []string, w, _ io.Writer) error {
 	if err != nil {
 		return err
 	}
-	path, _, err := findSession(c.configDir, id)
+	path, _, err := findSession(c.configDir, id, true)
 	if err != nil {
 		return err
 	}
@@ -398,7 +399,7 @@ func runSearch(args []string, w, errw io.Writer) error {
 		return err
 	}
 	var paths []string
-	for _, d := range configDirs(c.configDir) {
+	for _, d := range readDirs(c.configDir) {
 		p, err := session.Candidates(d, query)
 		if err != nil {
 			return err
@@ -619,7 +620,7 @@ func runResume(args []string, _, errw io.Writer) error {
 }
 
 func resume(configDir, id string, extra []string, errw io.Writer) error {
-	path, configDir, err := findSession(configDir, id)
+	path, configDir, err := findSession(configDir, id, false)
 	if err != nil {
 		return err
 	}
@@ -636,7 +637,7 @@ func resume(configDir, id string, extra []string, errw io.Writer) error {
 }
 
 func openWindow(configDir, id string, extra []string) error {
-	path, configDir, err := findSession(configDir, id)
+	path, configDir, err := findSession(configDir, id, false)
 	if err != nil {
 		return err
 	}
@@ -689,7 +690,7 @@ func runPreview(args []string, w, _ io.Writer) error {
 	if err != nil {
 		return err
 	}
-	path, _, err := findSession(c.configDir, id)
+	path, _, err := findSession(c.configDir, id, true)
 	if err != nil {
 		return err
 	}
@@ -754,10 +755,52 @@ func discoverAll(dirs []string) ([]string, error) {
 	return paths, nil
 }
 
-// findSession は ID を全部の config dir から引き、見つかったパスと config dir を返す。
-// resume はその config dir で claude を起動する。
-func findSession(primary, id string) (string, string, error) {
+// hubDirs は、ハブが手元のディレクトリのとき、config dir ごとのハブの置き場を返す。
+// ハブを置いた端末は pull しないので、他の端末の会話はハブにしか無い。ssh の先のハブは読まない
+func hubDirs(dirs []string) []string {
+	spec := os.Getenv("CCREEL_HUB")
+	if spec == "" {
+		return nil
+	}
+	h, err := hubsync.ParseHub(spec)
+	if err != nil || h.Host != "" {
+		return nil
+	}
+	var out []string
+	for _, d := range dirs {
+		if hd := filepath.Join(h.Root, filepath.Base(d)); !slices.Contains(dirs, hd) {
+			out = append(out, hd)
+		}
+	}
+	return out
+}
+
+// readDirs は読むだけのコマンドが探す置き場。手元の config dir を先に並べ、手元にもある会話は手元の方を使う
+func readDirs(primary string) []string {
 	dirs := configDirs(primary)
+	return append(dirs, hubDirs(dirs)...)
+}
+
+// findSession は ID を全部の config dir から引き、見つかったパスと config dir を返す。
+// resume はその config dir で claude を起動するので、ハブは withHub のときだけ、手元に無いときに引く。
+func findSession(primary, id string, withHub bool) (string, string, error) {
+	dirs := configDirs(primary)
+	path, dir, err := findIn(dirs, id)
+	if err != nil || path != "" {
+		return path, dir, err
+	}
+	if withHub {
+		hub := hubDirs(dirs)
+		if path, dir, err = findIn(hub, id); err != nil || path != "" {
+			return path, dir, err
+		}
+		dirs = append(dirs, hub...)
+	}
+	return "", "", fmt.Errorf("%w: %q in %s", session.ErrNotFound, id, strings.Join(dirs, ", "))
+}
+
+// findIn は dirs のどれか1つにだけある ID を引く。どこにも無ければ空のパスを返す。
+func findIn(dirs []string, id string) (string, string, error) {
 	var path, dir string
 	for _, d := range dirs {
 		p, err := session.Find(d, id)
@@ -771,9 +814,6 @@ func findSession(primary, id string) (string, string, error) {
 			return "", "", fmt.Errorf("%q matches sessions in both %s and %s", id, dir, d)
 		}
 		path, dir = p, d
-	}
-	if path == "" {
-		return "", "", fmt.Errorf("%w: %q in %s", session.ErrNotFound, id, strings.Join(dirs, ", "))
 	}
 	return path, dir, nil
 }
@@ -802,7 +842,7 @@ func runFind(args []string, w, _ io.Writer) error {
 		}
 	}
 	res, err := finder.Find(finder.ParseQuery(words), finder.Options{
-		ConfigDirs: configDirs(c.configDir), CurrentRepo: currentRepo(),
+		ConfigDirs: readDirs(c.configDir), CurrentRepo: currentRepo(),
 		Exclude: os.Getenv("CLAUDE_CODE_SESSION_ID"), Limit: *limit,
 	})
 	if err != nil {

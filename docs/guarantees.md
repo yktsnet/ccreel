@@ -192,6 +192,9 @@
 - `outline --json` の項目は `turn`・`time`・`prompt`・`reply`・`tools`、`search --json` の項目は `id`・`repo`・`title`・`updated`・`turn`・`kind`・`snippet` である
 - `push` は、送らなかった回に stdout にも stderr にも何も出さない
 - `preview` は、題・`@リポ`・`#番号`・ブランチを先頭にまとめ、その下に新しいターンから順に、発言と最終応答を Markdown で並べる
+- `CCREEL_HUB` が手元のディレクトリなら、`list`・`search`・`show`・`find` はハブにしか無いセッションも読み、cwd の先頭の `~` を手元のホームに戻す。`resume` はハブにしか無いセッションを開かない
+- 手元の config dir とハブの両方にあるセッションは、`list`・`search` で1本として扱い、`show` は失敗せず、`find` は手元の config dir の候補だけを返す
+- `CCREEL_HUB` が ssh の先（`host:path`）なら、ハブを読まない
 
 | 保証（要約） | 対応テスト |
 |---|---|
@@ -205,6 +208,9 @@
 | `outline` と `search` の JSON の項目 | `TestOutlineAndSearchJSONFields` |
 | 送らなかった回は何も出さない | `TestPushIsQuietWhenNothingIsSent` |
 | `preview` の形と並び | `TestPreviewIsNewestFirstMarkdown` |
+| 手元のハブも読み、resume はしない | `TestReadCommandsLookInLocalHub` |
+| 手元とハブの両方にあれば手元の1本 | `TestLocalCopyWinsOverHub` |
+| ssh の先のハブは読まない | `TestRemoteHubIsNotRead` |
 
 *（この節には複数のサブコマンドが混在するので、行ごとに主語を明示している）*
 

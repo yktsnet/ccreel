@@ -76,6 +76,25 @@ On the ccreel hub, the home prefix in project names and in `"cwd"` is replaced w
 
 How it works is in [docs/sync.md](docs/sync.md) (Japanese).
 
+### From your phone: one small Linux server is both the hub and the entry point
+
+Put the hub on a small always-on Linux server, and the same server can be your entry point from your phone. Run Claude Code there with Remote Control and connect from the Claude app on your phone.
+On the server that holds the hub, set `CCREEL_HUB` to a local directory. Read-only commands such as `find`, `search`, and `show` then read the hub directly, in addition to the config dirs.
+Ask from your phone about "that thing we discussed", and it can find conversations you had on your Mac or Linux machines.
+
+```mermaid
+flowchart LR
+  A(["Machine A"]) -.->|push| hub
+  B(["Machine B"]) -.->|push| hub
+  subgraph S["Small Linux server"]
+    hub[("Hub")]
+    rc(["claude (Remote Control)<br/>+ skill"]) -->|find / show| hub
+  end
+  phone(["📱 Claude app"]) --> rc
+```
+
+The server does not pull. Pulling would mix other machines' conversations into the server's `/resume` list. Reading the hub directly is enough to look things up.
+
 ## Quick Start
 
 Each machine needs `claude`, `fzf`, `rg`, `rsync`, and `ssh` (installing with Nix brings them along). The hub only needs ssh key login plus `rsync`, `sh`, `find`, and `stat`.
@@ -97,6 +116,12 @@ ccreel push                                 # the first run sends all local hist
 
 ```cron
 * * * * * CCREEL_HUB=<hub-host>:ccreel-hub ccreel push
+```
+
+If the server that holds the hub also writes sessions, give it the local directory and call only push there.
+
+```cron
+* * * * * CCREEL_HUB=$HOME/ccreel-hub ccreel push
 ```
 
 To use it from Claude Code, install the bundled skill (with Nix, it is at `share/ccreel/skills/ccreel`).
@@ -133,10 +158,11 @@ Options, deciding factors, revisit criteria, and the reasons behind the tech cho
 
 ## Scope
 
-Used on macOS and Linux (including WSL), with two machines and two config dirs.
+Used on macOS and Linux (including WSL), with two machines and two config dirs. The Linux server holding the hub doubles as the entry point from a phone.
 
 - If two machines write the same session at once, the hub keeps the newer one
 - Only the last 30 days are pulled locally; older sessions live only on the hub
+- Sessions only on the hub can be read on the server that holds it, but not resumed
 - Attachments (subagent transcripts, offloaded tool output) are not carried
 - No MCP server, index DB, or LLM-generated titles
 

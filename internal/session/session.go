@@ -167,9 +167,9 @@ func scan(path string, terms []string) (Meta, error) {
 			}
 		}
 		if r.CWD != "" {
-			m.CWD = r.CWD
+			m.CWD = expandHome(r.CWD)
 			if firstCWD == "" {
-				firstCWD = r.CWD
+				firstCWD = m.CWD
 			}
 		}
 		if r.Entrypoint == "sdk-cli" {
@@ -349,6 +349,18 @@ func siblingWorktree(cwd string) (dir, name string, ok bool) {
 		}
 	}
 	return "", "", false
+}
+
+// ハブの jsonl は cwd の先頭のホームを "~" にして持つ。ハブを直に読むときも、pull した写しと同じ cwd にする
+func expandHome(cwd string) string {
+	if cwd != "~" && !strings.HasPrefix(cwd, "~/") {
+		return cwd
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return cwd
+	}
+	return strings.TrimRight(home, "/") + cwd[1:]
 }
 
 // リポは起動した場所で決める。途中で別のリポへ cd しても、会話の主題は起動したリポにある。
