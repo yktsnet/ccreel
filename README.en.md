@@ -5,7 +5,7 @@
 [![CI](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml)
 
 A CLI that lists your past Claude Code conversations from every repo in one place and resumes the one you pick with Enter.
-Claude Code itself can run the same search once and get the right conversation.
+Claude Code itself can get the right conversation in a single call.
 Add a hub, a store reachable over ssh, and conversations from your other machines join the same list.
 
 ![demo: narrow conversations across all repos with @app #417, then press Enter to resume](demo/demo.gif)
@@ -15,59 +15,44 @@ Add a hub, a store reachable over ssh, and conversations from your other machine
 ### You search: pick one and resume it right away
 
 Type `ccreel` and sessions from every repo and every config dir are listed one per line, newest first. fzf opens full screen, and the right pane shows the conversation under the cursor.
-What you type narrows the list as you go. Narrow by repo with `@app`, by issue number with `#417`, or to the last 24 hours with `*0`, and combine them freely.
-Conversations held in a worktree are grouped under the original repo. The issue number comes from the branch or worktree name, so `#417` finds the work if you put the number in that name.
+What you type narrows the list as you go. Narrow by repo with `@app`, by issue number with `#417`, or to the last 24 hours with `*0`, and combine them freely. Conversations held in a worktree are grouped under the original repo.
 Enter moves to the directory the conversation was last working in and resumes it. Select several with Tab, and the second one onward opens in new tmux windows.
 
-### Claude Code searches: the right conversation, or candidates, in one call
+Claude Code's `/resume` gives each session two lines, and you see a conversation's content only after switching to the preview. By default it shows only sessions from the current directory.
+In tools for reading conversations (such as [claude-history](https://github.com/raine/claude-history)), picking a session opens a viewer, and resuming is a separate key.
 
-When you ask Claude Code to find "that thing we discussed before", it tends to call a list and a full-text search in turn, read deeply into the first hit, and miss the session that continued it.
-With the bundled skill installed, Claude Code only needs a single `ccreel find` call.
+### Claude Code searches: one conversation, decided
+
+With the bundled skill, Claude Code finds "that thing we talked about" with a single `ccreel find`.
 
 ```
-> Let's continue #417
+> I want to continue #417
 
 ⏺ ccreel find 417 --json
-  → decided: true  1c0e662e  @app #417「Lock invoices after month close」  issue #417 · body:417×6
+  → decided: true  1c0e662e  @app #417 "Lock invoices after month close"  issue #417 · body:417×6
 ⏺ ccreel outline 1c0e662e --json → ccreel show 1c0e662e --last 3 --json
-  (reads the last 3 turns and picks up from there)
+  (reads the last three turns and picks up from there)
 ```
 
-The CLI ranks the candidates and decides from the score gap whether one session is a clear winner, so Claude Code does not have to judge that each time. When there is no clear winner, it shows the candidates and asks before reading. `ccreel pick <words>`, which you type yourself, uses the same ranking. The scoring and the decision rule are in [docs/search.md](docs/search.md) (Japanese).
+ccreel scores the candidates and returns `decided: true` when the top one is far enough ahead of the second. Claude Code then reads the top one; when nothing is decided, it shows the candidates and asks before reading.
+Existing skills and MCP servers for searching history (such as claude-history and [claude-historian-mcp](https://github.com/Vvkmnn/claude-historian-mcp)) return a scored ranking and leave the choice of what to read to Claude Code.
+That way, Claude Code can read deep into the first hit and miss the session that continued it.
 
-```mermaid
-flowchart TD
-  human(["👤 ccreel pick words"])
-  claude(["🤖 skill"])
-  find{{"ccreel find<br/>score and rank"}}
-  human ==> find
-  claude --> find
-  find ==> resume(["pick in fzf and resume"])
-  find --> dec{"clear winner?"}
-  subgraph S["skill (Claude Code)"]
-    read(["read it and continue"])
-    ask(["show candidates and ask"])
-    retry(["retry once with other words"])
-  end
-  dec -->|"one session"| read
-  dec -->|"not decided"| ask
-  dec -->|"no candidates"| retry
-```
+`ccreel pick <words>`, which you type yourself, uses the same ranking. How scores are given and when a result counts as decided is in [docs/search.md](docs/search.md) (Japanese).
 
-### Across machines: any hub with ssh and rsync will do
+## Across machines
 
 A conversation started on macOS does not show up in `claude --resume` on a Linux machine.
-With ccreel, each machine pushes to the hub every minute and pulls when you open `ccreel`. A run with nothing changed finishes without connecting to the hub, so calling it every minute costs nothing.
-The hub needs no ccreel installed; a VPS, a Raspberry Pi, or a local directory all work.
-Put the hub on a small always-on Linux server, and the same server becomes your entry point from a phone. Run Claude Code there with Remote Control, and the Claude app on your phone can search and read conversations from every machine.
+With ccreel, each machine pushes to the hub and pulls when you open `ccreel`. Conversations carried over join the same list and search as local ones. Any hub reachable with ssh and rsync will do, and it needs no ccreel.
+Put the hub on an always-on Linux server and run Claude Code there with Remote Control, and the Claude app on your phone can search conversations from every machine, even when the machine that wrote them is off.
 
 ```mermaid
 flowchart TD
   subgraph A["Machine A (macOS)"]
     ca(["claude"])
   end
-  subgraph S["Hub server (VPS etc.)"]
-    hub[("Hub")]
+  subgraph S["Hub server (VPS, etc.)"]
+    hub[("hub")]
     rc(["claude (Remote Control)"])
   end
   subgraph B["Machine B (Linux)"]
@@ -78,22 +63,13 @@ flowchart TD
   phone -.-> rc -->|find| hub
 ```
 
-Syncing `projects/` as is does not make a session the same on machines whose home paths differ, because project names and `"cwd"` contain the home path.
-On the ccreel hub, the home prefix in project names and in `"cwd"` is replaced with `~`. Whether sent from `/Users/alice` on macOS or `/home/alice` on Linux, the same session becomes the same bytes, and the pulling machine maps it back to its own home.
-
-How it works is in [docs/sync.md](docs/sync.md) (Japanese).
-
-## How it differs from similar tools
-
-- **Claude Code's `/resume`**: each session takes two lines, and you only see a conversation's content after switching to the preview. By default it shows only sessions from the current directory, and it does not span config dirs or machines
-- **Tools for reading conversations** (such as [claude-history](https://github.com/raine/claude-history)): picking a session opens a viewer, and resuming is a separate key. For Claude Code they return a scored ranking and leave the choice of what to read to Claude Code
-- **Tools that sync sessions between machines**: they carry sessions over so the built-in `/resume` can show them, but do not search
-
-ccreel focuses on resuming right after you pick, and on handing Claude Code a result already narrowed to one conversation. For reading part of a conversation closely and quoting it, a tool built for reading is the better fit.
+How a session stays the same session across machines with different home paths is in [docs/sync.md](docs/sync.md) (Japanese).
 
 ## Quick Start
 
-Each machine needs `claude`, `fzf`, `rg`, `rsync`, and `ssh` (installing with Nix brings them along). The hub only needs ssh key login plus `rsync`, `sh`, `find`, and `stat`.
+### On one machine
+
+You need `claude`, `fzf`, and `rg` (installing with Nix brings them along).
 
 ```sh
 nix profile install github:yktsnet/ccreel
@@ -107,9 +83,12 @@ To use it from Claude Code, install the bundled skill (with Nix, it is at `share
 cp -r skills/ccreel ~/.claude/skills/
 ```
 
-On a single machine, just type `ccreel`.
+Then type `ccreel`.
 
-To connect several machines, set the hub on each and call push every minute.
+### Across machines
+
+Each machine also needs `rsync` and `ssh`. The hub needs only ssh key login and `rsync`, `sh`, `find`, and `stat`.
+On each machine, set the hub and call push every minute. A run with nothing changed finishes without connecting to the hub.
 
 ```sh
 export CCREEL_HUB=<hub-host>:ccreel-hub     # an ssh destination; a local directory also works
@@ -120,7 +99,7 @@ ccreel push                                 # the first run sends all local hist
 * * * * * CCREEL_HUB=<hub-host>:ccreel-hub ccreel push
 ```
 
-Add one small Linux server, and it can serve as both the hub and the entry point from your phone. Install ccreel and the skill there too, give it the local directory as the hub, and call only push every minute.
+To reach the hub server from your phone, install ccreel and the skill there too, give it the local directory as the hub, and call only push every minute.
 The server does not pull. Instead, read-only commands such as `find`, `search`, and `show` read the hub directly ([docs/sync.md](docs/sync.md), Japanese).
 
 ```sh
@@ -152,23 +131,30 @@ Other tools can work with sessions by reading `list --json` and `show --json`. F
 
 ## Design Decisions
 
-- **Sync sessions per file with rsync `--update`**: a jsonl is append-only and written by only one machine, so keeping the newer one never conflicts
+- **The CLI decides by score margin whether one conversation is decided**: Claude Code does not make that call, and the same request on the same history returns the same candidates and the same decision
+- **No index DB; rg narrows candidates before reading**: `find` takes under a second on about 1.4 GB of local history
 - **The hub only stores; listing, search, and resume run on the local copy**: search is fast, works offline, and Claude Code never reaches the hub however often it calls
-- **push compares against a local mirror and connects to the hub only when something changed**: an unchanged run finishes in milliseconds, so it can run every minute
 
-Options, deciding factors, revisit criteria, and the reasons behind the tech choices are in [docs/design-decisions.md](docs/design-decisions.md) (Japanese).
+Scoring is in [docs/search.md](docs/search.md); other decisions and the reasons behind the tech choices are in [docs/design-decisions.md](docs/design-decisions.md) (both Japanese).
 
 ## Scope
 
 Used on macOS and Linux (including WSL), with two machines and two config dirs. The Linux server holding the hub doubles as the entry point from a phone.
 
+On one machine:
+
+- The list leaves out sessions run with `claude -p` and sessions with a single prompt (`--all` shows the single-prompt ones)
+- The `#number` in the list comes from a number you put in the branch or worktree name
+- No MCP server, no index DB, and no LLM-generated titles
+
+Across machines:
+
 - If two machines write the same session at once, the hub keeps the newer one
 - Only the last 30 days are pulled locally; older sessions live only on the hub
-- Sessions only on the hub can be read on the server that holds it, but not resumed
+- Sessions only on the hub can be read on the server holding the hub, but not resumed
 - Attachments (subagent transcripts, offloaded tool output) are not carried
-- No MCP server, index DB, or LLM-generated titles
 
-Behavior backed by tests is listed in [docs/guarantees.md](docs/guarantees.md) (Japanese). Anything not listed there may change without notice.
+Behavior backed by tests is in [docs/guarantees.md](docs/guarantees.md). Behavior not listed there may change without notice.
 
 ## License
 
