@@ -4,24 +4,33 @@
 
 [![CI](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml)
 
-Claude Code を複数の端末で使う人のための CLI。セッション履歴を ssh でつながる置き場（ハブ）に集め、どの端末からでも探して resume できる。
-人が fzf で手早く探して resume する場面と、Claude Code に頼んで正しい会話をすぐ引かせる場面の両方に、同じ検索を使う。
-端末が1台でも、`@リポ`・`#Issue番号` で絞れる一覧として使え、Claude Code からも履歴を読める。
+Claude Code の過去の会話を全部のリポから1つの一覧で探し、Enter ですぐ resume する CLI。
+Claude Code 自身も1回の呼び出しで正しい会話を引ける。
+ssh でつながる置き場（ハブ）を足せば、ほかの端末の会話も同じ一覧に並ぶ。
 
 ![demo: 全部のリポの会話から @app #417 で絞り込み、Enter で resume する](demo/demo.gif)
 
 ## Why
 
-### 人が探す: 全部の端末とリポの会話を、1つの一覧から
+CLI の Claude Code では、過去の会話を探して resume しにくい。`/resume` は既定でいまのディレクトリの会話しか出さない。会話ごとにタイトルと更新日などで2行を使うので1画面に十数本しか並ばず、中身はプレビューに切り替えないと見えない。
+どのリポで話したかを覚えていない会話は、ディレクトリを移りながら探すことになる。
 
-`ccreel` を打つと、全部の端末・全部の config dir のセッションが新しい順に fzf に並ぶ。
-`@app` でリポ、`#417` で Issue 番号、`*0` で直近24時間のものに絞れる。worktree で作業した会話も元のリポにまとまり、Issue 番号はブランチ名か worktree の名前から取る。
-Enter で、その会話を始めたディレクトリへ移って resume する。Tab で複数を選ぶと、2本目からは tmux の新しいウィンドウで開く。
+過去の会話は自分で探して resume することもあれば、Claude Code に「前に話したあの件」と頼んで探させることもある。どちらも同じくらいよくある。
+ccreel はどちらにも同じ検索を使う。自分で探しても Claude Code に探させても、同じ言葉なら同じ会話が見つかる。
 
-### Claude Code が探す: 1回の呼び出しで、正しい会話か候補か
+履歴を探す既存の道具では、自分で探すことと Claude Code に探させることを1つで満たせなかった。会話を読むための道具（[claude-history](https://github.com/raine/claude-history) など）は、選ぶと読む画面が開き、resume は別の操作になる。
+Claude Code 向けの skill や MCP サーバーは、点数つきの順位を返し、どれを読むかを委ねる。そのため Claude Code は、最初に当たった1本を深く読み、続きのセッションを見落とすことがある。
 
-Claude Code に「前に話したあの件」を探させると、一覧と全文検索を順に呼んで最初に当たった1本を深く読み、続きのセッションを見落とすことがある。
-同梱の skill を入れると、Claude Code は `ccreel find` を1回呼ぶだけで済む。
+## 一覧から選んで resume する
+
+`ccreel` と打つと、全部のリポ・全部の config dir のセッションが1行に1本ずつ新しい順に並ぶ。fzf は全画面で開き、右のペインには選んでいる会話の中身を出す。
+打った文字がそのまま絞り込みになる。`@app` でリポ、`#417` で Issue 番号、`*0` で直近24時間のものに絞れ、組み合わせてもよい。worktree で作業した会話は元のリポにまとまる。
+Enter で、その会話で最後に作業していたディレクトリへ移って resume する。Tab で複数を選ぶと、2本目からは tmux の新しいウィンドウで開く。
+
+## Claude Code に探させる
+
+同梱の skill を入れると、Claude Code は `ccreel find` を1回呼ぶ。ccreel が候補に点を付け、1位が2位を十分に引き離していれば、その1本で決まりという意味の `decided: true` を返す。
+Claude Code はその1本を読み、決まらなければ読む前に候補を見せて聞く。
 
 ```
 > #417 の続きをやりたい
@@ -32,33 +41,13 @@ Claude Code に「前に話したあの件」を探させると、一覧と全�
   （直前の3ターンを読んで、続きから答える）
 ```
 
-候補の順位と、1本に決め切れるかどうかは CLI が点差で判定し、Claude Code には毎回判断させない。決め切れなければ、読む前に候補を見せて聞く。人が打つ `ccreel pick <言葉>` も同じ順位で並ぶ。点の付け方と判定の条件は [docs/search.md](docs/search.md) にある。
+人が打つ `ccreel pick <言葉>` も `find` と同じ順位で並ぶ。点の付け方と判定の条件は [docs/search.md](docs/search.md) にある。
 
-```mermaid
-flowchart TD
-  human(["👤 ccreel pick 言葉"])
-  claude(["🤖 skill"])
-  find{{"ccreel find<br/>点を付けて並べる"}}
-  human ==> find
-  claude --> find
-  find ==> resume(["fzf で選んで resume"])
-  find --> dec{"決め切れたか"}
-  subgraph S["skill（Claude Code）"]
-    read(["読んで続きから答える"])
-    ask(["候補を見せて聞く"])
-    retry(["語を変えて1回探し直す"])
-  end
-  dec -->|"1本に決まる"| read
-  dec -->|"決め切れない"| ask
-  dec -->|"候補なし"| retry
-```
+## 複数の端末で使う
 
-### 端末をまたぐ: ハブは ssh と rsync があれば何でもよい
-
-macOS で始めた会話は、そのままでは Linux の端末の `claude --resume` に出てこない。
-ccreel では各端末が毎分ハブへ push し、`ccreel` を開くときに pull する。変わったものが無い回はハブにつながずに終わるので、毎分呼んでも負荷はかからない。
-ハブには ccreel を入れる必要がなく、VPS・Raspberry Pi・手元のディレクトリのどれでも置ける。
-ハブを常時動く小さな Linux サーバーに置けば、同じサーバーにスマホからもつなげる。サーバーで Claude Code を Remote Control で動かすと、スマホの Claude アプリから全部の端末の会話を探して読める。
+macOS で始めた会話はそのままでは Linux の端末の `claude --resume` に出てこない。
+ccreel では各端末がハブへ push し、`ccreel` を開くときに pull する。運んだ会話も手元の会話と同じ一覧と検索に載る。ハブは ssh と rsync が使えれば何でもよく、ccreel を入れる必要はない。
+ハブを常時動く Linux サーバーに置き、そこで Claude Code を Remote Control で動かすと、スマホの Claude アプリから全部の端末の会話を探せる。会話を書いた端末が起動していなくてもよい。
 
 ```mermaid
 flowchart TD
@@ -77,14 +66,13 @@ flowchart TD
   phone -.-> rc -->|find| hub
 ```
 
-`projects/` をそのまま同期するだけでは、ホームのパスが違う端末どうしで同じセッションとして扱えない。プロジェクト名と `"cwd"` にホームのパスが入っているためである。
-ccreel のハブでは、プロジェクト名と `"cwd"` の先頭のホームを `~` に置き換えて持つ。macOS の `/Users/alice` と Linux の `/home/alice` のどちらから送っても同じセッションは同じバイト列になり、pull した端末では自分のホームへ戻す。
-
-仕組みは [docs/sync.md](docs/sync.md) にある。
+ホームのパスが違う端末どうしで同じセッションとして扱う仕組みは、[docs/sync.md](docs/sync.md) にある。
 
 ## Quick Start
 
-手元の端末に `claude`・`fzf`・`rg`・`rsync`・`ssh` が要る（Nix で入れれば一緒に入る）。ハブには、ssh の鍵認証でログインでき、`rsync`・`sh`・`find`・`stat` があれば足りる。
+### 1台で使う
+
+手元に `claude`・`fzf`・`rg` が要る（Nix で入れれば一緒に入る）。
 
 ```sh
 nix profile install github:yktsnet/ccreel
@@ -98,9 +86,12 @@ Claude Code から使うには、同梱の skill を入れる（Nix で入れた
 cp -r skills/ccreel ~/.claude/skills/
 ```
 
-1台で使うなら、`ccreel` と打つだけである。
+あとは `ccreel` と打つ。
 
-複数の端末をつなぐときは、各端末でハブの宛先を決め、push を毎分呼ぶ。
+### 複数の端末で使う
+
+各端末には `rsync`・`ssh` も要る。ハブには ssh の鍵認証でログインでき、`rsync`・`sh`・`find`・`stat` があれば足りる。
+各端末でハブの宛先を決め、push を毎分呼ぶ。変わったものが無い回はハブにつながずに終わる。
 
 ```sh
 export CCREEL_HUB=<hub-host>:ccreel-hub     # ssh の先。手元のディレクトリも指定できる
@@ -111,7 +102,7 @@ ccreel push                                 # 初回は手元の履歴を全部�
 * * * * * CCREEL_HUB=<hub-host>:ccreel-hub ccreel push
 ```
 
-小さな Linux サーバーを1台足すと、ハブと、スマホからつなぐ先を兼ねられる。サーバーにも ccreel と skill を入れ、宛先には手元のディレクトリを渡して push だけを毎分呼ぶ。
+ハブを置いたサーバーにスマホからつなぐなら、サーバーにも ccreel と skill を入れ、宛先には手元のディレクトリを渡して push だけを毎分呼ぶ。
 サーバーは pull しない。代わりに `find`・`search`・`show` などの読むだけのコマンドが、ハブを直に読む（[docs/sync.md](docs/sync.md#ハブを置いたサーバーで読む)）。
 
 ```sh
@@ -143,21 +134,28 @@ fzf の操作・JSON の項目・環境変数・フラグは [docs/usage.md](doc
 
 ## Design Decisions
 
-- **セッションをファイル単位の rsync `--update` で合わせる**: jsonl は追記しかされず、1本は1台の端末でしか書かれないので、新しい方を残すだけで衝突しない
-- **ハブは置き場だけにし、一覧・検索・resume は手元の写しで行う**: 検索が速く、オフラインでも動き、Claude Code が何度呼んでもハブまで行かない
-- **push は手元の mirror と比べ、変わったものがあるときだけハブにつなぐ**: 変わったものが無い回は数ミリ秒で終わるので、毎分呼べる
+- **1本に決め切れたかを CLI が点差で判定する**: Claude Code に判断させず、同じ履歴に同じ依頼をすれば、同じ候補と同じ判定が返る
+- **索引 DB を持たず、rg で候補を絞ってから読む**: 手元の履歴（約1.4GB）で `find` が1秒かからない
+- **ハブは置き場だけにし、一覧・検索・resume は手元の config dir にある会話で行う**: 検索が速く、オフラインでも動き、Claude Code が何度呼んでもハブまで行かない
 
-選択肢・決め手・再検討の境界と、技術の選定理由は [docs/design-decisions.md](docs/design-decisions.md) にある。
+点の付け方は [docs/search.md](docs/search.md)、ほかの判断と技術の選定理由は [docs/design-decisions.md](docs/design-decisions.md) にある。
 
 ## Scope
 
 macOS と Linux（WSL を含む）で、2台の端末と2つの config dir で使っている。ハブを置いた Linux サーバーは、スマホからつなぐ先も兼ねている。
 
+1台で使うとき:
+
+- 一覧には `claude -p` で動かしたセッションと、発言が1回だけのセッションを出さない（発言が1回のものは `--all` で出る）
+- 一覧の `#番号` はブランチ名か worktree の名前に入れた番号から取る
+- MCP サーバー・索引 DB・LLM によるタイトルの生成は持たない
+
+複数の端末で使うとき:
+
 - 同じセッションを2台で同時に書くと、ハブでは更新の新しい方が残る
 - 手元へ pull するのは直近30日まで。それより古いセッションはハブにだけある
 - ハブにしか無いセッションは、ハブを置いたサーバーで読めるが、resume はできない
 - 付属物（サブエージェントの記録・退避したツール出力）は運ばない
-- MCP サーバ・索引 DB・LLM によるタイトルの生成は持たない
 
 テストで裏付けた振る舞いは [docs/guarantees.md](docs/guarantees.md) にある。そこに載っていない振る舞いは、予告なく変わることがある。
 

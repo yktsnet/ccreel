@@ -1,6 +1,25 @@
 # Search
 
-`ccreel find` と、言葉を渡した `ccreel pick <言葉>` は、セッションに点を付け、1本に決め切れたかを判断する。流れ図は [README](../README.md) の「Claude Code が探す」にある。
+`ccreel find` と、言葉を渡した `ccreel pick <言葉>` は、セッションに点を付け、1本に決め切れたかを判断する。
+
+```mermaid
+flowchart TD
+  human(["👤 ccreel pick 言葉"])
+  claude(["🤖 skill"])
+  find{{"ccreel find<br/>点を付けて並べる"}}
+  human ==> find
+  claude --> find
+  find ==> resume(["fzf で選んで resume"])
+  find --> dec{"決め切れたか"}
+  subgraph S["skill（Claude Code）"]
+    read(["読んで続きから答える"])
+    ask(["候補を見せて聞く"])
+    retry(["語を変えて1回探し直す"])
+  end
+  dec -->|"1本に決まる"| read
+  dec -->|"決め切れない"| ask
+  dec -->|"候補なし"| retry
+```
 
 ## 言葉の読み分け
 
