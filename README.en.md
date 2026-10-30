@@ -12,7 +12,7 @@ Add a hub, a store reachable over ssh, and conversations from your other machine
 
 ## Why
 
-### You search: pick one and resume it right away
+### Pick from the list and resume right away
 
 Type `ccreel` and sessions from every repo and every config dir are listed one per line, newest first. fzf opens full screen, and the right pane shows the conversation under the cursor.
 What you type narrows the list as you go. Narrow by repo with `@app`, by issue number with `#417`, or to the last 24 hours with `*0`, and combine them freely. Conversations held in a worktree are grouped under the original repo.
@@ -21,9 +21,13 @@ Enter moves to the directory the conversation was last working in and resumes it
 Claude Code's `/resume` gives each session two lines, and you see a conversation's content only after switching to the preview. By default it shows only sessions from the current directory.
 In tools for reading conversations (such as [claude-history](https://github.com/raine/claude-history)), picking a session opens a viewer, and resuming is a separate key.
 
-### Claude Code searches: one conversation, decided
+### Let Claude Code find past conversations
 
-With the bundled skill, Claude Code finds "that thing we talked about" with a single `ccreel find`.
+When you ask Claude Code for "that thing we talked about" and hand it only a ranking of candidates, it can read deep into the first hit and miss the session that continued it.
+Existing skills and MCP servers for searching history (such as claude-history and [claude-historian-mcp](https://github.com/Vvkmnn/claude-historian-mcp)) return a scored ranking and leave the choice of what to read to Claude Code.
+
+With the bundled skill, Claude Code calls `ccreel find` once. ccreel scores the candidates, and when the top one is far enough ahead of the second, it returns `decided: true`, meaning that one is the answer.
+Claude Code reads that one; when nothing is decided, it shows the candidates and asks before reading.
 
 ```
 > I want to continue #417
@@ -34,13 +38,9 @@ With the bundled skill, Claude Code finds "that thing we talked about" with a si
   (reads the last three turns and picks up from there)
 ```
 
-ccreel scores the candidates and returns `decided: true` when the top one is far enough ahead of the second. Claude Code then reads the top one; when nothing is decided, it shows the candidates and asks before reading.
-Existing skills and MCP servers for searching history (such as claude-history and [claude-historian-mcp](https://github.com/Vvkmnn/claude-historian-mcp)) return a scored ranking and leave the choice of what to read to Claude Code.
-That way, Claude Code can read deep into the first hit and miss the session that continued it.
-
 `ccreel pick <words>`, which you type yourself, uses the same ranking. How scores are given and when a result counts as decided is in [docs/search.md](docs/search.md) (Japanese).
 
-## Across machines
+## On several machines
 
 A conversation started on macOS does not show up in `claude --resume` on a Linux machine.
 With ccreel, each machine pushes to the hub and pulls when you open `ccreel`. Conversations carried over join the same list and search as local ones. Any hub reachable with ssh and rsync will do, and it needs no ccreel.
@@ -85,7 +85,7 @@ cp -r skills/ccreel ~/.claude/skills/
 
 Then type `ccreel`.
 
-### Across machines
+### On several machines
 
 Each machine also needs `rsync` and `ssh`. The hub needs only ssh key login and `rsync`, `sh`, `find`, and `stat`.
 On each machine, set the hub and call push every minute. A run with nothing changed finishes without connecting to the hub.
@@ -147,7 +147,7 @@ On one machine:
 - The `#number` in the list comes from a number you put in the branch or worktree name
 - No MCP server, no index DB, and no LLM-generated titles
 
-Across machines:
+On several machines:
 
 - If two machines write the same session at once, the hub keeps the newer one
 - Only the last 30 days are pulled locally; older sessions live only on the hub

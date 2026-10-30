@@ -12,7 +12,7 @@ ssh でつながる置き場（ハブ）を足せば、ほかの端末の会話�
 
 ## Why
 
-### 人が探す: 選んですぐ resume する
+### 一覧から選んですぐ resume する
 
 `ccreel` と打つと、全部のリポ・全部の config dir のセッションが1行に1本ずつ新しい順に並ぶ。fzf は全画面で開き、右のペインには選んでいる会話の中身を出す。
 打った文字がそのまま絞り込みになる。`@app` でリポ、`#417` で Issue 番号、`*0` で直近24時間のものに絞れ、組み合わせてもよい。worktree で作業した会話は元のリポにまとまる。
@@ -21,9 +21,13 @@ Enter で、その会話で最後に作業していたディレクトリへ移�
 Claude Code の `/resume` は1本に2行を使い、会話の中身はプレビューに切り替えないと見えない。既定ではいまのディレクトリのセッションだけを出す。
 会話を読むための道具（[claude-history](https://github.com/raine/claude-history) など）では、選ぶと読む画面が開き、resume は別のキーで行う。
 
-### Claude Code が探す: 1本に決め切って返す
+### Claude Code に過去の会話を探させる
 
-同梱の skill を入れると、Claude Code は「前に話したあの件」を `ccreel find` の1回で探す。
+Claude Code に「前に話したあの件」を探させたとき、候補の順位だけが返ってくると、最初に当たった1本を深く読み、続きのセッションを見落とすことがある。
+履歴を探す既存の skill や MCP サーバー（claude-history・[claude-historian-mcp](https://github.com/Vvkmnn/claude-historian-mcp) など）は、点数つきの順位を返し、どれを読むかを Claude Code に委ねる。
+
+同梱の skill を入れると、Claude Code は `ccreel find` を1回呼ぶ。ccreel が候補に点を付け、1位が2位を十分に引き離していれば、その1本で決まりという意味の `decided: true` を返す。
+Claude Code はその1本を読み、決まらなければ読む前に候補を見せて聞く。
 
 ```
 > #417 の続きをやりたい
@@ -34,13 +38,9 @@ Claude Code の `/resume` は1本に2行を使い、会話の中身はプレビ�
   （直前の3ターンを読んで、続きから答える）
 ```
 
-ccreel は候補に点を付け、1位が2位を十分に引き離していれば `decided: true` を返す。Claude Code はそのまま1位を読み、決め切れなければ読む前に候補を見せて聞く。
-履歴を探す既存の skill や MCP サーバー（claude-history・[claude-historian-mcp](https://github.com/Vvkmnn/claude-historian-mcp) など）は、点数つきの順位を返し、どれを読むかを Claude Code に委ねる。
-この形だと、Claude Code は最初に当たった1本を深く読み、続きのセッションを見落とすことがある。
-
 人が打つ `ccreel pick <言葉>` も `find` と同じ順位で並ぶ。点の付け方と判定の条件は [docs/search.md](docs/search.md) にある。
 
-## 端末をまたぐ
+## 複数の端末で使う
 
 macOS で始めた会話はそのままでは Linux の端末の `claude --resume` に出てこない。
 ccreel では各端末がハブへ push し、`ccreel` を開くときに pull する。運んだ会話も手元の会話と同じ一覧と検索に載る。ハブは ssh と rsync が使えれば何でもよく、ccreel を入れる必要はない。
@@ -85,7 +85,7 @@ cp -r skills/ccreel ~/.claude/skills/
 
 あとは `ccreel` と打つ。
 
-### 端末をまたぐ
+### 複数の端末で使う
 
 各端末には `rsync`・`ssh` も要る。ハブには ssh の鍵認証でログインでき、`rsync`・`sh`・`find`・`stat` があれば足りる。
 各端末でハブの宛先を決め、push を毎分呼ぶ。変わったものが無い回はハブにつながずに終わる。
@@ -147,7 +147,7 @@ macOS と Linux（WSL を含む）で、2台の端末と2つの config dir で�
 - 一覧の `#番号` はブランチ名か worktree の名前に入れた番号から取る
 - MCP サーバー・索引 DB・LLM によるタイトルの生成は持たない
 
-端末をまたぐとき:
+複数の端末で使うとき:
 
 - 同じセッションを2台で同時に書くと、ハブでは更新の新しい方が残る
 - 手元へ pull するのは直近30日まで。それより古いセッションはハブにだけある
