@@ -12,19 +12,22 @@ Add a hub, a store reachable over ssh, and conversations from your other machine
 
 ## Why
 
-### Pick from the list and resume right away
+In the Claude Code CLI, finding a past conversation and resuming it is hard. By default `/resume` shows only conversations from the current directory, gives each one two lines, and shows content only after you switch to the preview.
+A conversation you no longer remember the repo of means moving from directory to directory to find it.
+
+You look for past conversations in two situations, about equally often: searching from the shell yourself to resume where you left off, and asking Claude Code mid-conversation to find "that thing we talked about".
+Using the same tool for both means the same words bring the same conversation to the top. When you check the conversation Claude Code chose, the same words list the same candidates.
+
+Existing history tools did not cover both in one. Tools for reading conversations (such as [claude-history](https://github.com/raine/claude-history)) open a viewer when you pick a session, and resuming is a separate action.
+Skills and MCP servers for Claude Code return a scored ranking and leave the choice of what to read to it, so Claude Code can read deep into the first hit and miss the session that continued it.
+
+## Pick from the list and resume
 
 Type `ccreel` and sessions from every repo and every config dir are listed one per line, newest first. fzf opens full screen, and the right pane shows the conversation under the cursor.
 What you type narrows the list as you go. Narrow by repo with `@app`, by issue number with `#417`, or to the last 24 hours with `*0`, and combine them freely. Conversations held in a worktree are grouped under the original repo.
 Enter moves to the directory the conversation was last working in and resumes it. Select several with Tab, and the second one onward opens in new tmux windows.
 
-Claude Code's `/resume` gives each session two lines, and you see a conversation's content only after switching to the preview. By default it shows only sessions from the current directory.
-In tools for reading conversations (such as [claude-history](https://github.com/raine/claude-history)), picking a session opens a viewer, and resuming is a separate key.
-
-### Let Claude Code find past conversations
-
-When you ask Claude Code for "that thing we talked about" and hand it only a ranking of candidates, it can read deep into the first hit and miss the session that continued it.
-Existing skills and MCP servers for searching history (such as claude-history and [claude-historian-mcp](https://github.com/Vvkmnn/claude-historian-mcp)) return a scored ranking and leave the choice of what to read to Claude Code.
+## Let Claude Code find it
 
 With the bundled skill, Claude Code calls `ccreel find` once. ccreel scores the candidates, and when the top one is far enough ahead of the second, it returns `decided: true`, meaning that one is the answer.
 Claude Code reads that one; when nothing is decided, it shows the candidates and asks before reading.
@@ -38,7 +41,7 @@ Claude Code reads that one; when nothing is decided, it shows the candidates and
   (reads the last three turns and picks up from there)
 ```
 
-`ccreel pick <words>`, which you type yourself, uses the same ranking. How scores are given and when a result counts as decided is in [docs/search.md](docs/search.md) (Japanese).
+`ccreel pick <words>`, which you type yourself, uses the same ranking as `find`. How scores are given and when a result counts as decided is in [docs/search.md](docs/search.md) (Japanese).
 
 ## On several machines
 
