@@ -12,13 +12,13 @@ Add a hub, a store reachable over ssh, and conversations from your other machine
 
 ## Why
 
-In the Claude Code CLI, finding a past conversation and resuming it is hard. By default `/resume` shows only conversations from the current directory, gives each one two lines, and shows content only after you switch to the preview.
+In the Claude Code CLI, finding a past conversation and resuming it is hard. By default `/resume` shows only conversations from the current directory. Each one takes two lines for its title, date, and the like, so only a dozen or so fit on a screen, and you see the content only after switching to the preview.
 A conversation you no longer remember the repo of means moving from directory to directory to find it.
 
-You look for past conversations in two situations, about equally often: searching from the shell yourself to resume where you left off, and asking Claude Code mid-conversation to find "that thing we talked about".
-Using the same tool for both means the same words bring the same conversation to the top. When you check the conversation Claude Code chose, the same words list the same candidates.
+Sometimes you look for a past conversation yourself to resume it; sometimes you ask Claude Code to find "that thing we talked about". Both happen about equally often.
+ccreel uses the same search for both. Whether you search or Claude Code does, the same words find the same conversation.
 
-Existing history tools did not cover both in one. Tools for reading conversations (such as [claude-history](https://github.com/raine/claude-history)) open a viewer when you pick a session, and resuming is a separate action.
+Existing history tools did not cover searching yourself and letting Claude Code search in one tool. Tools for reading conversations (such as [claude-history](https://github.com/raine/claude-history)) open a viewer when you pick a session, and resuming is a separate action.
 Skills and MCP servers for Claude Code return a scored ranking and leave the choice of what to read to it, so Claude Code can read deep into the first hit and miss the session that continued it.
 
 ## Pick from the list and resume
