@@ -58,42 +58,29 @@ flowchart TD
 A conversation started on macOS does not show up in `claude --resume` on a Linux machine.
 With ccreel, each machine pushes to the hub every minute and pulls when you open `ccreel`. A run with nothing changed finishes without connecting to the hub, so calling it every minute costs nothing.
 The hub needs no ccreel installed; a VPS, a Raspberry Pi, or a local directory all work.
+Put the hub on a small always-on Linux server, and the same server becomes your entry point from a phone. Run Claude Code there with Remote Control, and the Claude app on your phone can search and read conversations from every machine.
 
 ```mermaid
-flowchart LR
+flowchart TD
   subgraph A["Machine A (macOS)"]
     ca(["claude"])
   end
-  hub[("Hub (VPS etc.)")]
+  subgraph S["Hub server (VPS etc.)"]
+    hub[("Hub")]
+    rc(["claude (Remote Control)"])
+  end
   subgraph B["Machine B (Linux)"]
     fb{{"ccreel (fzf)"}} ==> rb(["claude --resume"])
   end
+  phone(["📱 Claude app"])
   ca -.->|push| hub -.->|pull| fb
+  phone -.-> rc -->|find| hub
 ```
 
 Syncing `projects/` as is does not make a session the same on machines whose home paths differ, because project names and `"cwd"` contain the home path.
 On the ccreel hub, the home prefix in project names and in `"cwd"` is replaced with `~`. Whether sent from `/Users/alice` on macOS or `/home/alice` on Linux, the same session becomes the same bytes, and the pulling machine maps it back to its own home.
 
 How it works is in [docs/sync.md](docs/sync.md) (Japanese).
-
-### From your phone: one small Linux server is both the hub and the entry point
-
-Put the hub on a small always-on Linux server, and the same server can be your entry point from your phone. Run Claude Code there with Remote Control and connect from the Claude app on your phone.
-On the server that holds the hub, set `CCREEL_HUB` to a local directory. Read-only commands such as `find`, `search`, and `show` then read the hub directly, in addition to the config dirs.
-Ask from your phone about "that thing we discussed", and it can find conversations you had on your Mac or Linux machines.
-
-```mermaid
-flowchart LR
-  A(["Machine A"]) -.->|push| hub
-  B(["Machine B"]) -.->|push| hub
-  subgraph S["Small Linux server"]
-    hub[("Hub")]
-    rc(["claude (Remote Control)<br/>+ skill"]) -->|find / show| hub
-  end
-  phone(["📱 Claude app"]) --> rc
-```
-
-The server does not pull. Pulling would mix other machines' conversations into the server's `/resume` list. Reading the hub directly is enough to look things up.
 
 ## Quick Start
 
@@ -103,6 +90,12 @@ Each machine needs `claude`, `fzf`, `rg`, `rsync`, and `ssh` (installing with Ni
 nix profile install github:yktsnet/ccreel
 # or
 go install github.com/yktsnet/ccreel/cmd/ccreel@latest    # Go 1.24 or later
+```
+
+To use it from Claude Code, install the bundled skill (with Nix, it is at `share/ccreel/skills/ccreel`).
+
+```sh
+cp -r skills/ccreel ~/.claude/skills/
 ```
 
 On a single machine, just type `ccreel`.
@@ -118,16 +111,16 @@ ccreel push                                 # the first run sends all local hist
 * * * * * CCREEL_HUB=<hub-host>:ccreel-hub ccreel push
 ```
 
-If the server that holds the hub also writes sessions, give it the local directory and call only push there.
+Add one small Linux server, and it can serve as both the hub and the entry point from your phone. Install ccreel and the skill there too, give it the local directory as the hub, and call only push every minute.
+The server does not pull. Instead, read-only commands such as `find`, `search`, and `show` read the hub directly ([docs/sync.md](docs/sync.md), Japanese).
+
+```sh
+export CCREEL_HUB=$HOME/ccreel-hub          # the hub itself, so a local directory
+claude --remote-control                     # connect from the Claude app on your phone
+```
 
 ```cron
 * * * * * CCREEL_HUB=$HOME/ccreel-hub ccreel push
-```
-
-To use it from Claude Code, install the bundled skill (with Nix, it is at `share/ccreel/skills/ccreel`).
-
-```sh
-cp -r skills/ccreel ~/.claude/skills/
 ```
 
 ## Usage
