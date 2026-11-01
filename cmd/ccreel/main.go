@@ -195,7 +195,7 @@ func runList(args []string, w, _ io.Writer) error {
 	}
 	enc := json.NewEncoder(w)
 	n := 0
-	for _, m := range session.ScanAll(paths) {
+	for _, m := range session.ScanAllCached(paths, metaCache()) {
 		if !keep(m) {
 			continue
 		}
@@ -564,7 +564,7 @@ func runPick(args []string, _, errw io.Writer) error {
 		if err != nil {
 			return err
 		}
-		for _, m := range session.ScanAll(paths) {
+		for _, m := range session.ScanAllCached(paths, metaCache()) {
 			if keep(m) {
 				metas = append(metas, m)
 			}
@@ -741,6 +741,21 @@ func configDirs(primary string) []string {
 		}
 	}
 	return dirs
+}
+
+// metaCache は一覧の組み立て結果を残す置き場。CCREEL_META_CACHE が空でなければそれを使い、"off" なら残さない
+func metaCache() string {
+	if p := os.Getenv("CCREEL_META_CACHE"); p != "" {
+		if p == "off" {
+			return ""
+		}
+		return p
+	}
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(cache, "ccreel", "meta.json")
 }
 
 func discoverAll(dirs []string) ([]string, error) {

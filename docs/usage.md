@@ -55,7 +55,8 @@
 | `CLAUDE_CONFIG_DIR` | 既定の config dir。無ければ `~/.claude`。`--config-dir` が優先する |
 | `CCREEL_FZF_OPTS` | fzf に足す引数 |
 | `CCREEL_CLAUDE` | `claude` の代わりに起動するコマンド |
-| `XDG_CACHE_HOME` | mirror の置き場の基点 |
+| `CCREEL_META_CACHE` | `list` と `pick` が一覧の組み立て結果を残すファイル。既定は `$XDG_CACHE_HOME/ccreel/meta.json`。`off` で残さない |
+| `XDG_CACHE_HOME` | mirror と一覧のキャッシュの置き場の基点 |
 
 resume のときは、セッションのある config dir を `CLAUDE_CONFIG_DIR` にして claude を起動する。
 
