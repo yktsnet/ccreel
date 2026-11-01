@@ -226,3 +226,70 @@ func TestScanAllTermsCountsConversationOnly(t *testing.T) {
 		t.Errorf("Hits = %v, want wireguard:2", got)
 	}
 }
+
+func TestScanAllCachedMatchesAndRefreshes(t *testing.T) {
+	src, _ := Discover(fixtureDir)
+	dir := t.TempDir()
+	var paths []string
+	for _, p := range src {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dst := filepath.Join(dir, "projects", filepath.Base(filepath.Dir(p)), filepath.Base(p))
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dst, b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, dst)
+	}
+	cache := filepath.Join(dir, "cache", "meta.json")
+	ids := func(ms []Meta) string {
+		var s []string
+		for _, m := range ms {
+			s = append(s, m.ID[:8]+":"+m.Title)
+		}
+		return strings.Join(s, ",")
+	}
+	want := ids(ScanAll(paths))
+	if got := ids(ScanAllCached(paths, cache)); got != want {
+		t.Fatalf("first run: got %s, want %s", got, want)
+	}
+	if _, err := os.Stat(cache); err != nil {
+		t.Fatalf("cache not written: %v", err)
+	}
+	// 2回目は残した結果から同じ一覧を出す
+	if got := ids(ScanAllCached(paths, cache)); got != want {
+		t.Fatalf("cached run: got %s, want %s", got, want)
+	}
+	// 追記されたセッションは読み直す
+	target := paths[0]
+	before := ScanAll([]string{target})
+	if len(before) == 0 {
+		t.Skip("first fixture is not listed")
+	}
+	f, err := os.OpenFile(target, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(`{"type":"custom-title","customTitle":"Renamed after cache"}` + "\n")
+	f.Close()
+	var found bool
+	for _, m := range ScanAllCached(paths, cache) {
+		if m.Path == target {
+			found = m.Title == "Renamed after cache"
+		}
+	}
+	if !found {
+		t.Fatal("appended session was not rescanned")
+	}
+	// 消したセッションは出さない
+	os.Remove(target)
+	for _, m := range ScanAllCached(paths, cache) {
+		if m.Path == target {
+			t.Fatal("removed session still listed")
+		}
+	}
+}

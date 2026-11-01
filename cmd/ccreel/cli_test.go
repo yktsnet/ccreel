@@ -56,6 +56,8 @@ func TestMain(m *testing.M) {
 	} {
 		os.Unsetenv(k)
 	}
+	// 一覧の結果を手元のキャッシュに書かせない
+	os.Setenv("CCREEL_META_CACHE", "off")
 	os.Exit(m.Run())
 }
 

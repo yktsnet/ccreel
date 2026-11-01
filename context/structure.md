@@ -4,6 +4,7 @@
 cmd/ccreel/main.go          サブコマンドの振り分けと出力（表 / JSON Lines）。上限と切り詰めの表示もここで行う
 internal/session/           jsonl の読み出し
   session.go                  Discover（セッションを探す）・Find（UUID の先頭から引く）・Scan（一覧の1行を組み立てる）・ScanAll
+  cache.go                    ScanAllCached（大きさと更新日時が前回と同じ jsonl は読まず、残した結果を使う）
   transcript.go               ReadTurns（セッションをターンに分ける）
   search.go                   Candidates（rg で候補を絞る）・Search（新しい順に読んで当たった箇所を返す）
 internal/pathmap/           プロジェクト名と jsonl の "cwd" の先頭のホームを、端末の形と `~` の形で相互に変換する
@@ -23,16 +24,18 @@ flake.nix                   Nix のパッケージ。fzf・rg・rsync・ssh を 
 
 ```
 <config dir>/projects/*/*.jsonl
-  ├─ Discover → ScanAll(Scan) → []Meta  → list
+  ├─ Discover → ScanAllCached(Scan) → []Meta  → list
   ├─ Find → ReadTurns → []Turn          → show / outline
   ├─ Candidates(rg) → Search            → search
   ├─ ParseQuery → collect(rg) → score → decide → find
-  └─ pull → Discover（言葉があれば finder の順位）→ ScanAll → fzf → Find → ResumeDir → claude --resume → pick
+  └─ pull → Discover（言葉があれば finder の順位）→ ScanAllCached → fzf → Find → ResumeDir → claude --resume → pick
                                                                   （2本目からは tmux new-window）
 
 push: <config dir>/projects → mirror（ContentToHub）→ rsync → <hub>/<config dir 名>/projects
 pull: <hub>/<config dir 名>/projects → rsync（直近30日）→ mirror → <config dir>/projects（ContentFromHub）
 ```
+
+履歴は数 GB になり、全部を読むと一覧が出るまで数秒かかる。そのため `list` と `pick`（言葉なし）は、jsonl ごとの一覧の1行を `$XDG_CACHE_HOME/ccreel/meta.json` に残し、大きさと更新日時が前回と同じものは読み直さない。実行中のバイナリが変わったら全部を捨てて読み直す。
 
 mirror は既定で `$XDG_CACHE_HOME/ccreel/<config dir 名>` に置く。mirror に書いたファイルには元の更新日時を付け直す。
 pull で運んだものを push しても、rsync が差分なしと判定するためである。

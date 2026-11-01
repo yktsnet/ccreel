@@ -411,8 +411,18 @@ func ScanAll(paths []string) []Meta {
 
 // ScanAllTerms は ScanAll と同じ一覧を返し、各行の Hits に語ごとの当たり数を入れる。
 func ScanAllTerms(paths []string, terms []string) []Meta {
-	out := make([]Meta, len(paths))
-	ok := make([]bool, len(paths))
+	var metas []Meta
+	for _, m := range scanEach(paths, terms) {
+		if m != nil {
+			metas = append(metas, *m)
+		}
+	}
+	return finish(metas)
+}
+
+// scanEach は paths と同じ並びで結果を返す。読めなかったファイルは nil にする
+func scanEach(paths []string, terms []string) []*Meta {
+	out := make([]*Meta, len(paths))
 	sem := make(chan struct{}, 8)
 	var wg sync.WaitGroup
 	for i, p := range paths {
@@ -421,16 +431,21 @@ func ScanAllTerms(paths []string, terms []string) []Meta {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			m, err := scan(p, terms)
-			if err == nil && m.Prompts > 0 && !m.Headless {
-				out[i], ok[i] = m, true
+			if m, err := scan(p, terms); err == nil {
+				out[i] = &m
 			}
 		}()
 	}
 	wg.Wait()
-	metas := out[:0]
-	for i, m := range out {
-		if ok[i] {
+	return out
+}
+
+// finish は人の発言が無いセッションと claude -p のセッションを外し、新しい順に並べる。
+// 同じ UUID が複数のプロジェクトにあれば、更新の新しい方だけを残す。
+func finish(all []Meta) []Meta {
+	metas := all[:0]
+	for _, m := range all {
+		if m.Prompts > 0 && !m.Headless {
 			metas = append(metas, m)
 		}
 	}

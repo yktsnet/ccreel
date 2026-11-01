@@ -143,7 +143,7 @@
 | サブエージェントの記録は探さない | `TestCandidates` |
 | 探す範囲と件数の上限 | `TestSearch` |
 
-### 7. `internal/session/session_test.go` — internal/session (Discover / Scan / ScanAllTerms)
+### 7. `internal/session/session_test.go` — internal/session (Discover / Scan / ScanAllTerms / ScanAllCached)
 
 - 一覧に出すのは projects 直下のセッションだけで、`<uuid>/subagents/` などの付属物は出さない
 - 一覧の1行は、タイトル・最初の発言（スラッシュコマンドは打った形）・最後の cwd・リポ・ブランチ・Issue 番号・発言の数・最初と最後の時刻を持つ。発言の数に、`isMeta`・`tool_result`・サブエージェントの発言は入れない
@@ -154,6 +154,7 @@
 - 同じ UUID が複数のプロジェクトにあるときは、更新の新しい方の1行だけを出す
 - リポ名は起動した場所の cwd から取る。ホームで起動したセッションは最後の cwd から取る
 - リポ名は cwd の末尾から取る。cwd が worktree の中（`.claude/worktrees/…` と `<リポ>.wt/…`）か、worktree を置くディレクトリそのもののときは、元のリポの名前にする。Issue 番号は、`task/417-…` のようなブランチ名か worktree の名前から取る。数字の直後に `-` と英字が続くときだけ、その数字を番号にし、`day/2026-10-08` のような日付は番号にしない
+- `ScanAllCached` は `ScanAll` と同じ一覧を返す。大きさか更新日時が変わったセッションは読み直し、消えたセッションは出さない
 
 | 保証（要約） | 対応テスト |
 |---|---|
@@ -163,6 +164,7 @@
 | 新しい順・発言の無いものを出さない | `TestScanAllOrderAndEmpty` |
 | リポ名と Issue 番号の取り方 | `TestRepoNameAndIssue` |
 | `claude -p` のセッションを出さない | `TestScanAllSkipsHeadless` |
+| キャッシュを使っても同じ一覧で、変わったものは読み直す | `TestScanAllCachedMatchesAndRefreshes` |
 | 同じ UUID は1行にまとめる | `TestSameUUIDInTwoProjects` |
 | リポは起動した場所から | `TestRepoComesFromWhereTheSessionStarted` |
 | 途中で現れた Issue 番号を残す | `TestIssueSurvivesReturnToMain` |
