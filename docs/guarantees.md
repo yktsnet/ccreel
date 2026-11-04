@@ -6,7 +6,7 @@
 
 - `show --turns` は `3` で1ターン、`2-4` で範囲を選び、`--last N` はその中の最後の N ターンに絞る。数でない指定や逆順の範囲はエラーにする
 - 1つのメッセージを切り詰めたときは、末尾に `… [truncated N chars]` を付けて、落とした文字数を示す
-- `show <id> --final --json --last 1` のように、フラグはセッション ID の後ろに置いても効く
+- `show <id> --final --json --last 1` のように、フラグはセッション ID の後ろに置いても同じに扱われる
 - `show` は、出力の合計文字数が `--max-total` を超えたら、最初のターンだけは出して止め、残りのターン数と次のターン番号を stderr に書く。stdout の JSON Lines には混ぜない
 - `pick` と `resume` で `--` より後ろに書いた引数は、そのまま claude に渡す
 - resume で claude に渡す環境では、`CLAUDE_CONFIG_DIR` を選んだ config dir の1つだけにする

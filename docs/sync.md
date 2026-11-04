@@ -35,7 +35,7 @@ pull は、ハブの一覧を更新日時つきで取り、mirror より新し�
 
 ## ssh の接続
 
-ssh は `~/.ssh/config` の多重化（`ControlMaster`）を使わず、毎回つなぎ直す。`ConnectTimeout` は新しくつなぐときにしか効かないので、固まった多重化の接続を通すと pull がいつまでも返らない。
+ssh は `~/.ssh/config` の多重化（`ControlMaster`）を使わず、毎回つなぎ直す。`ConnectTimeout` は新しくつなぐときにしか適用されないので、固まった多重化の接続を通すと pull がいつまでも返らない。
 つないだあとに応答が止まったら、ssh の `ServerAliveInterval` と rsync の `--timeout` で切る。初回の大きな転送のように、時間がかかっても進んでいるものは切らない。
 
 ## 保持期間

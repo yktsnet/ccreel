@@ -131,7 +131,7 @@ find . -mindepth 1 -maxdepth 1 -type d -empty -exec rmdir {} +`, h.dir(configNam
 }
 
 // sshOpts は ~/.ssh/config の多重化を使わず、応答の止まった接続を切る。ConnectTimeout は新しくつなぐときにしか
-// 効かないので、固まった ControlMaster を通すと pull がいつまでも返らず、pick が fzf を開けない。
+// 適用されないので、固まった ControlMaster を通すと pull がいつまでも返らず、pick が fzf を開けない。
 var sshOpts = []string{
 	"-o", "ConnectTimeout=5", "-o", "BatchMode=yes", "-o", "ControlPath=none",
 	"-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3",
