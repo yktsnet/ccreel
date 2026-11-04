@@ -6,15 +6,15 @@
 flowchart TD
   human(["👤 ccreel pick 言葉"])
   claude(["🤖 skill"])
-  find{{"ccreel find<br/>点を付けて並べる"}}
+  find{{"🔍 ccreel find<br/>点を付けて並べる"}}
   human ==> find
   claude --> find
-  find ==> resume(["fzf で選んで resume"])
-  find --> dec{"決め切れたか"}
+  find ==> resume(["▶️ fzf で選んで resume"])
+  find --> dec{"❓ 決め切れたか"}
   subgraph S["skill（Claude Code）"]
-    read(["読んで続きから答える"])
-    ask(["候補を見せて聞く"])
-    retry(["語を変えて1回探し直す"])
+    read(["📖 読んで続きから答える"])
+    ask(["💬 候補を見せて聞く"])
+    retry(["🔁 語を変えて1回探し直す"])
   end
   dec -->|"1本に決まる"| read
   dec -->|"決め切れない"| ask

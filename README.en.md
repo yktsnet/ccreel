@@ -52,14 +52,14 @@ Put the hub on an always-on Linux server and run Claude Code there with Remote C
 ```mermaid
 flowchart TD
   subgraph A["Machine A (macOS)"]
-    ca(["claude"])
+    ca(["🤖 claude"])
   end
   subgraph S["Hub server (VPS, etc.)"]
-    hub[("hub")]
-    rc(["claude (Remote Control)"])
+    hub[("🗄️ hub")]
+    rc(["🤖 claude (Remote Control)"])
   end
   subgraph B["Machine B (Linux)"]
-    fb{{"ccreel (fzf)"}} ==> rb(["claude --resume"])
+    fb{{"🔍 ccreel (fzf)"}} ==> rb(["▶️ claude --resume"])
   end
   phone(["📱 Claude app"])
   ca -.->|push| hub -.->|pull| fb

@@ -52,14 +52,14 @@ ccreel では各端末がハブへ push し、`ccreel` を開くときに pull �
 ```mermaid
 flowchart TD
   subgraph A["端末 A（macOS）"]
-    ca(["claude"])
+    ca(["🤖 claude"])
   end
   subgraph S["ハブのサーバー（VPS など）"]
-    hub[("ハブ")]
-    rc(["claude（Remote Control）"])
+    hub[("🗄️ ハブ")]
+    rc(["🤖 claude（Remote Control）"])
   end
   subgraph B["端末 B（Linux）"]
-    fb{{"ccreel (fzf)"}} ==> rb(["claude --resume"])
+    fb{{"🔍 ccreel (fzf)"}} ==> rb(["▶️ claude --resume"])
   end
   phone(["📱 Claude アプリ"])
   ca -.->|push| hub -.->|pull| fb
