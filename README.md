@@ -5,21 +5,25 @@
 [![CI](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml)
 
 Claude Code の過去の会話を全部のリポから1つの一覧で探し、Enter ですぐ resume する CLI。
-Claude Code 自身も1回の呼び出しで正しい会話を引ける。
+Claude Code も1回の呼び出しで会話を探し、1本に決まればそのまま読む。
 ssh でつながる置き場（ハブ）を足せば、ほかの端末の会話も同じ一覧に並ぶ。
 
 ![demo: 全部のリポの会話から @app #417 で絞り込み、Enter で resume する](demo/demo.gif)
 
 ## Why
 
-CLI の Claude Code では、過去の会話を探して resume しにくい。`/resume` は既定でいまのディレクトリの会話しか出さない。会話ごとにタイトルと更新日などで2行を使うので1画面に十数本しか並ばず、中身はプレビューに切り替えないと見えない。
-どのリポで話したかを覚えていない会話は、ディレクトリを移りながら探すことになる。
+CLI の Claude Code の `/resume` は、既定でいまのディレクトリの会話しか出さない（Ctrl+A で全部のリポに切り替える）。1本に2行を使うので1画面に十数本しか並ばず、中身はプレビューに切り替えないと見えない。
 
-過去の会話は自分で探して resume することもあれば、Claude Code に「前に話したあの件」と頼んで探させることもある。どちらも同じくらいよくある。
-ccreel はどちらにも同じ検索を使う。自分で探しても Claude Code に探させても、同じ言葉なら同じ会話が見つかる。
+[claude-history](https://github.com/raine/claude-history) は、全部のリポの会話を探して読む道具である。選ぶとまず読む画面が開き、resume は機能の1つである。Claude Code 向けの skill は関連度の順位を返し、どれを読むかを Claude Code に任せる。
 
-履歴を探す既存の道具では、自分で探すことと Claude Code に探させることを1つで満たせなかった。会話を読むための道具（[claude-history](https://github.com/raine/claude-history) など）は、選ぶと読む画面が開き、resume は別の操作になる。
-Claude Code 向けの skill や MCP サーバーは、点数つきの順位を返し、どれを読むかを委ねる。そのため Claude Code は、最初に当たった1本を深く読み、続きのセッションを見落とすことがある。
+ccreel は resume のための道具である。全部のリポの会話を1行1本で並べ、Enter で最後に作業したディレクトリへ移って resume する。Claude Code から探すときは、ブランチ名の Issue 番号を最も強い手がかりにし、1本に決め切れたかまで返す。
+
+| | `/resume` | claude-history | ccreel |
+|---|---|---|---|
+| 主な目的 | resume する | 会話を探して読む | 会話を探して resume する |
+| skill からも呼べるか | 呼べない | 呼べる | 呼べる |
+| 対応エージェント | Claude Code | Claude Code・Codex・Pi・OMP | Claude Code |
+| 端末をまたいで一覧に出せるか | 出せない | 出せない | 出せる（ハブを置く） |
 
 ## 一覧から選んで resume する
 
