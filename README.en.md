@@ -8,7 +8,7 @@ A CLI that lists your past Claude Code conversations from every repo in one plac
 Claude Code can search in a single call too, and reads the conversation straight away when one stands out.
 Add a hub, a store reachable over ssh, and conversations from your other machines join the same list.
 
-![demo: narrow conversations across all repos with @app #417, then press Enter to resume](demo/demo.gif)
+![demo: narrow conversations across all repos with @app #417, then press Enter to resume](docs/demo/demo.gif)
 
 ## Why
 

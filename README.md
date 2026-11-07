@@ -8,7 +8,7 @@ Claude Code の過去の会話を全部のリポから1つの一覧で探し、E
 Claude Code も1回の呼び出しで会話を探し、1本に決まればそのまま読む。
 ssh でつながる置き場（ハブ）を足せば、ほかの端末の会話も同じ一覧に並ぶ。
 
-![demo: 全部のリポの会話から @app #417 で絞り込み、Enter で resume する](demo/demo.gif)
+![demo: 全部のリポの会話から @app #417 で絞り込み、Enter で resume する](docs/demo/demo.gif)
 
 ## Why
 

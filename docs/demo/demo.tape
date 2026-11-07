@@ -1,10 +1,10 @@
 # VHS demo: ccreel
-# 生成: リポルートで `vhs demo/demo.tape`（go・fzf・bat が PATH に要る）
+# 生成: リポルートで `vhs docs/demo/demo.tape`（go・fzf・bat が PATH に要る）
 # 示したいこと: 全部のリポの会話が1つの一覧に並び、`@app #417` と打つと絞り込まれ、Enter でその会話を resume する
-# 素材: demo/gensessions が書く架空のセッション。claude の代わりに demo/claude を起動する
+# 素材: docs/demo/gensessions が書く架空のセッション。claude の代わりに docs/demo/claude を起動する
 # 尺規範: 10秒前後
 
-Output demo/demo.gif
+Output docs/demo/demo.gif
 
 Set FontSize 18
 Set Width 1600
@@ -15,9 +15,9 @@ Set TypingSpeed 80ms
 Hide
 Type "export DEMO=$(mktemp -d) PS1='$ '"
 Enter
-Type "go build -o $DEMO/ccreel ./cmd/ccreel && go run ./demo/gensessions $DEMO/cfg"
+Type "go build -o $DEMO/ccreel ./cmd/ccreel && go run ./docs/demo/gensessions $DEMO/cfg"
 Enter
-Type "export PATH=$DEMO:$PATH CLAUDE_CONFIG_DIR=$DEMO/cfg CCREEL_CONFIG_DIRS= CCREEL_HUB= CCREEL_CLAUDE=$PWD/demo/claude"
+Type "export PATH=$DEMO:$PATH CLAUDE_CONFIG_DIR=$DEMO/cfg CCREEL_CONFIG_DIRS= CCREEL_HUB= CCREEL_CLAUDE=$PWD/docs/demo/claude"
 Enter
 Sleep 8s
 Type "clear"
