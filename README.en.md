@@ -5,21 +5,25 @@
 [![CI](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/ccreel/actions/workflows/ci.yml)
 
 A CLI that lists your past Claude Code conversations from every repo in one place and resumes the one you pick with Enter.
-Claude Code itself can get the right conversation in a single call.
+Claude Code can search in a single call too, and reads the conversation straight away when one stands out.
 Add a hub, a store reachable over ssh, and conversations from your other machines join the same list.
 
 ![demo: narrow conversations across all repos with @app #417, then press Enter to resume](demo/demo.gif)
 
 ## Why
 
-In the Claude Code CLI, finding a past conversation and resuming it is hard. By default `/resume` shows only conversations from the current directory. Each one takes two lines for its title, date, and the like, so only a dozen or so fit on a screen, and you see the content only after switching to the preview.
-A conversation you no longer remember the repo of means moving from directory to directory to find it.
+In the Claude Code CLI, `/resume` shows only conversations from the current directory by default (Ctrl+A switches to all repos). Each entry takes two lines, so only a dozen or so fit on a screen, and you see the content only after switching to the preview.
 
-Sometimes you look for a past conversation yourself to resume it; sometimes you ask Claude Code to find "that thing we talked about". Both happen about equally often.
-ccreel uses the same search for both. Whether you search or Claude Code does, the same words find the same conversation.
+[claude-history](https://github.com/raine/claude-history) is a tool for searching and reading conversations across all repos. Picking one first opens a viewer, and resuming is one of its features. Its skill for Claude Code returns a relevance ranking and leaves the choice of what to read to Claude Code.
 
-Existing history tools did not cover searching yourself and letting Claude Code search in one tool. Tools for reading conversations (such as [claude-history](https://github.com/raine/claude-history)) open a viewer when you pick a session, and resuming is a separate action.
-Skills and MCP servers for Claude Code return a scored ranking and leave the choice of what to read to it, so Claude Code can read deep into the first hit and miss the session that continued it.
+ccreel is a tool for resuming. It lists conversations from all repos one per line, and Enter moves to the directory you last worked in and resumes there. When Claude Code searches, the issue number in the branch name is the strongest signal, and ccreel also reports whether a single conversation stands out.
+
+| | `/resume` | claude-history | ccreel |
+|---|---|---|---|
+| Main purpose | Resume | Find and read conversations | Find and resume conversations |
+| Callable from a skill | No | Yes | Yes |
+| Supported agents | Claude Code | Claude Code, Codex, Pi, OMP | Claude Code |
+| Lists conversations across machines | No | No | Yes (with a hub) |
 
 ## Pick from the list and resume
 
