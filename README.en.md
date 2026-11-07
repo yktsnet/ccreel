@@ -107,7 +107,7 @@ ccreel push                                 # the first run sends all local hist
 ```
 
 To reach the hub server from your phone, install ccreel and the skill there too, give it the local directory as the hub, and call only push every minute.
-The server does not pull. Instead, read-only commands such as `find`, `search`, and `show` read the hub directly ([docs/sync.md](docs/sync.md), Japanese).
+The server does not pull. Instead, read-only commands such as `find`, `search`, and `show` read the hub directly ([docs/sync.md](docs/sync.md#ハブを置いたサーバーで読む), Japanese).
 
 ```sh
 export CCREEL_HUB=$HOME/ccreel-hub          # the hub itself, so a local directory
@@ -142,7 +142,7 @@ Other tools can work with sessions by reading `list --json` and `show --json`. F
 - **No index DB; rg narrows candidates before reading**: `find` takes under a second on about 1.4 GB of local history
 - **The hub only stores; listing, search, and resume run on the local copy**: search is fast, works offline, and Claude Code never reaches the hub however often it calls
 
-Scoring is in [docs/search.md](docs/search.md); other decisions and the reasons behind the tech choices are in [docs/design-decisions.md](docs/design-decisions.md) (both Japanese).
+Other decisions and the reasons behind the tech choices are in [docs/design-decisions.md](docs/design-decisions.md) (Japanese).
 
 ## Scope
 

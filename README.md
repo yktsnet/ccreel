@@ -142,7 +142,7 @@ fzf の操作・JSON の項目・環境変数・フラグは [docs/usage.md](doc
 - **索引 DB を持たず、rg で候補を絞ってから読む**: 手元の履歴（約1.4GB）で `find` が1秒かからない
 - **ハブは置き場だけにし、一覧・検索・resume は手元の config dir にある会話で行う**: 検索が速く、オフラインでも動き、Claude Code が何度呼んでもハブまで行かない
 
-点の付け方は [docs/search.md](docs/search.md)、ほかの判断と技術の選定理由は [docs/design-decisions.md](docs/design-decisions.md) にある。
+ほかの判断と技術の選定理由は [docs/design-decisions.md](docs/design-decisions.md) にある。
 
 ## Scope
 
