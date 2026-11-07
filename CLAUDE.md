@@ -6,9 +6,9 @@ Claude Code のセッション履歴を端末間で共有し、fzf で選んで 
 
 フェーズ: **MVP期**。
 
-@context/conventions.md
-@context/structure.md
-@context/domain.md
+@docs/context/conventions.md
+@docs/context/structure.md
+@docs/context/domain.md
 
 ## コマンド
 
