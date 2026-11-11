@@ -175,6 +175,15 @@ func TestPullWindowAndPrune(t *testing.T) {
 	}
 	old := now.Add(-45 * 24 * time.Hour)
 	os.Chtimes(stale, old, old)
+	// mirror にある40日を過ぎたものも消える
+	staleMirror := filepath.Join(mac.opt.Mirror, "projects", "~-src-other", idOld+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(staleMirror), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staleMirror, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.Chtimes(staleMirror, old, old)
 
 	st, err := Push(mac.opt)
 	if err != nil {
@@ -194,6 +203,9 @@ func TestPullWindowAndPrune(t *testing.T) {
 	}
 	if exists(stale) || exists(filepath.Dir(stale)) {
 		t.Error("45-day-old session on the hub was not pruned")
+	}
+	if exists(staleMirror) {
+		t.Error("45-day-old session in the mirror was not pruned")
 	}
 
 	// 30日より古いものは pull しない
