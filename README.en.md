@@ -161,7 +161,7 @@ On several machines:
 - Sessions only on the hub can be read on the server holding the hub, but not resumed
 - Attachments (subagent transcripts, offloaded tool output) are not carried
 
-Behavior backed by tests is in [docs/guarantees.md](docs/guarantees.md). Behavior not listed there may change without notice.
+Behavior backed by tests is in [docs/guarantees/](docs/guarantees/README.md). Behavior not listed there may change without notice.
 
 ## License
 

@@ -161,7 +161,7 @@ macOS と Linux（WSL を含む）で、2台の端末と2つの config dir で�
 - ハブにしか無いセッションは、ハブを置いたサーバーで読めるが、resume はできない
 - 付属物（サブエージェントの記録・退避したツール出力）は運ばない
 
-テストで裏付けた振る舞いは [docs/guarantees.md](docs/guarantees.md) にある。そこに載っていない振る舞いは、予告なく変わることがある。
+テストで裏付けた振る舞いは [docs/guarantees/](docs/guarantees/README.md) にある。そこに載っていない振る舞いは、予告なく変わることがある。
 
 ## License
 
