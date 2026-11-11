@@ -26,6 +26,7 @@
 | 保証 | 対応テスト |
 |---|---|
 | `Push` はハブにある、最後の更新から `KeepDays`（既定40日）を過ぎたセッションを消す | `TestPullWindowAndPrune` |
+| `Push` は mirror（ハブと同じ形にした手元の写し）からも `KeepDays` を過ぎたセッションを消す | `TestPullWindowAndPrune` |
 | `Push` は変わったセッションが無く、前回の送信も済んでいれば、ハブにつながない | `TestPushOnlyWhenChanged` |
 | `Push` は送れなかった変更を、次の `Push` で変わったものが無くても送り直す | `TestPushOnlyWhenChanged` |
 | `Push` は古いものを消す処理を1日に1回だけ実行する | `TestPushOnlyWhenChanged` |

@@ -12,6 +12,7 @@
 | `show` は `show <id> --final --json --last 1` のようにセッション ID の後ろに置いたフラグも、前に置いたときと同じに扱う | `TestShowFlagsAfterID` |
 | `show` は出力の合計文字数が `--max-total` を超えたら、最初のターンだけは出して止める | `TestShowMaxTotal` |
 | `show` は `--max-total` で止めたとき、残りのターン数と次のターン番号を stderr に書く | `TestShowMaxTotal` |
+| `show --json` は `--max-total` で止めたとき、止めた知らせを stdout の JSON Lines に混ぜない | `TestShowJSONMaxTotal` |
 | `outline --json` の項目は `turn`・`time`・`prompt`・`reply`・`tools` である | `TestOutlineAndSearchJSONFields` |
 | `preview` はタイトル・`@リポ`・`#番号`・ブランチを先頭にまとめる | `TestPreviewIsNewestFirstMarkdown` |
 | `preview` は先頭の下に新しいターンから順に、発言と最終応答を Markdown で並べる | `TestPreviewIsNewestFirstMarkdown` |

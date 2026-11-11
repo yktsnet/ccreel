@@ -88,6 +88,23 @@ func TestShowMaxTotal(t *testing.T) {
 	}
 }
 
+func TestShowJSONMaxTotal(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
+	var out, errw bytes.Buffer
+	if err := runShow([]string{"1111", "--json", "--max-total", "10"}, &out, &errw); err != nil {
+		t.Fatal(err)
+	}
+	// stdout の各行が JSON として読め、止めた知らせは stderr にだけ出る
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		if !json.Valid([]byte(line)) {
+			t.Errorf("non-JSON line on stdout: %q", line)
+		}
+	}
+	if strings.Contains(out.String(), "more turn(s)") || !strings.Contains(errw.String(), "1 more turn(s) from turn 2") {
+		t.Errorf("stdout = %q, stderr = %q", out.String(), errw.String())
+	}
+}
+
 func TestSplitPassthrough(t *testing.T) {
 	own, rest := splitPassthrough([]string{"fzf", "--no-pull", "--", "--model", "x"})
 	if fmt.Sprint(own) != "[fzf --no-pull]" || fmt.Sprint(rest) != "[--model x]" {

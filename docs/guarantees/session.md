@@ -13,6 +13,7 @@
 | 一覧は同じ UUID が複数のプロジェクトにあるとき、更新の新しい方の1行だけを出す | `TestSameUUIDInTwoProjects` |
 | `ScanAllCached` は `ScanAll` と同じ一覧を返す | `TestScanAllCachedMatchesAndRefreshes` |
 | `ScanAllCached` は大きさが変わったセッションを読み直す | `TestScanAllCachedMatchesAndRefreshes` |
+| `ScanAllCached` は大きさが同じで更新日時だけが変わったセッションを読み直す | `TestScanAllCachedMatchesAndRefreshes` |
 | `ScanAllCached` は消えたセッションを出さない | `TestScanAllCachedMatchesAndRefreshes` |
 
 ## 一覧の行のタイトル・リポ名・Issue 番号
@@ -43,6 +44,7 @@
 | 検索は既定で発言と応答の文章だけを探す | `TestSearch` |
 | 検索は `Tools` を付けるとツールの入出力も探す | `TestSearch` |
 | 検索は1セッションから出す件数に上限を付けられる | `TestSearch` |
+| 検索は全体の件数に上限を付けられる | `TestSearch` |
 
 ## ターンとセッション ID（`ReadTurns`・`session.Find`）
 

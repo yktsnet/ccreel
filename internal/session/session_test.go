@@ -285,6 +285,26 @@ func TestScanAllCachedMatchesAndRefreshes(t *testing.T) {
 	if !found {
 		t.Fatal("appended session was not rescanned")
 	}
+	// 大きさが同じで更新日時だけが変わったセッションも読み直す
+	b, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b = []byte(strings.Replace(string(b), "Renamed after cache", "Retitled same sizes", 1))
+	if err := os.WriteFile(target, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	later := time.Now().Add(time.Hour)
+	os.Chtimes(target, later, later)
+	found = false
+	for _, m := range ScanAllCached(paths, cache) {
+		if m.Path == target {
+			found = m.Title == "Retitled same sizes"
+		}
+	}
+	if !found {
+		t.Fatal("session with only a new mtime was not rescanned")
+	}
 	// 消したセッションは出さない
 	os.Remove(target)
 	for _, m := range ScanAllCached(paths, cache) {

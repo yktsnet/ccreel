@@ -65,6 +65,11 @@ func TestSearch(t *testing.T) {
 		t.Errorf("per-session 1: got %d hits", len(hits))
 	}
 
+	hits, _ = Search(paths, "parser", SearchOptions{Context: 10, Tools: true, Limit: 3})
+	if len(hits) != 3 {
+		t.Errorf("limit 3: got %d hits", len(hits))
+	}
+
 	hits, _ = Search(paths, "parser", SearchOptions{Context: 10, Filter: func(m Meta) bool { return m.Repo == "other" }})
 	if len(hits) != 0 {
 		t.Errorf("filtered out: got %d hits", len(hits))
