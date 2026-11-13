@@ -59,7 +59,7 @@
 | `XDG_CACHE_HOME` | mirror と一覧のキャッシュの置き場の基点 |
 
 resume のときは、セッションのある config dir を `CLAUDE_CONFIG_DIR` にして claude を起動する。
-`pick` と `resume` に `--keep-config-dir` を付けると、`--config-dir`（無ければ `CLAUDE_CONFIG_DIR`）で起動する。セッションが別の config dir にあれば、同じプロジェクトの下へ写してから開く。上限に達したアカウントの会話を、別のアカウントで続けるときに使う。
+`pick` と `resume` に `--keep-config-dir` を付けると、`--config-dir`（無ければ `CLAUDE_CONFIG_DIR`）で起動する。セッションが別の config dir にあれば、同じプロジェクトの下へ写してから開く。別の config dir で始めた会話を、いまの config dir のアカウントで続けるときに使う。
 
 ## push / pull のフラグ
 
