@@ -97,6 +97,49 @@ func TestResumeUsesTheSessionsConfigDir(t *testing.T) {
 	}
 }
 
+func TestResumeKeepConfigDirCopiesTheSession(t *testing.T) {
+	work, _ := secondConfigDir(t)
+	primary := t.TempDir()
+	out := filepath.Join(t.TempDir(), "claude.out")
+	fake := filepath.Join(t.TempDir(), "fake-claude")
+	script := "#!/bin/sh\n{ echo \"$CLAUDE_CONFIG_DIR\"; echo \"$*\"; } > " + out + "\n"
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command(os.Args[0])
+	cmd.Env = append(os.Environ(),
+		"CCREEL_TEST_MAIN=1",
+		"CCREEL_TEST_ARGS=resume --keep-config-dir bbbbbbbb",
+		"CCREEL_CLAUDE="+fake,
+		"CLAUDE_CONFIG_DIR="+primary,
+		"CCREEL_CONFIG_DIRS="+work,
+	)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("resume: %v\n%s", err, b)
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(got) != 2 || got[0] != primary || got[1] != "--resume "+otherID {
+		t.Errorf("claude saw %q, want config dir %s and --resume %s", got, primary, otherID)
+	}
+	src, _ := os.ReadFile(filepath.Join(work, "projects", "-src-work-app", otherID+".jsonl"))
+	dst, err := os.ReadFile(filepath.Join(primary, "projects", "-src-work-app", otherID+".jsonl"))
+	if err != nil || string(dst) != string(src) {
+		t.Errorf("session was not copied into the primary config dir: %v", err)
+	}
+
+	// 写したあとは同じ会話が2つの config dir にあるが、引けなくならない
+	var w, errw strings.Builder
+	t.Setenv("CCREEL_CONFIG_DIRS", work)
+	if err := runShow([]string{"bbbbbbbb", "--config-dir", primary}, &w, &errw); err != nil {
+		t.Errorf("show after copy: %v", err)
+	}
+}
+
 func TestShowFindsSessionInOtherConfigDir(t *testing.T) {
 	work, _ := secondConfigDir(t)
 	t.Setenv("CLAUDE_CONFIG_DIR", "../../testdata")
