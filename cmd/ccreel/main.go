@@ -661,7 +661,7 @@ func openWindow(configDir, id string, keepDir bool, extra []string) error {
 
 // locateForResume は resume で開くセッションと config dir を決める。keepDir なら、別の config dir にある
 // セッションを primary の同じプロジェクトへ写し、primary で開く。claude --resume は CLAUDE_CONFIG_DIR の
-// 下にある jsonl しか開けないので、上限に達したアカウントの会話を別のアカウントで続けるには写すしかない
+// 下にある jsonl しか開けないので、別の config dir で始めた会話をこの config dir で続けるには写すしかない
 func locateForResume(primary, id string, keepDir bool) (string, string, error) {
 	path, dir, err := findSession(primary, id, false)
 	if err != nil || !keepDir || filepath.Clean(dir) == filepath.Clean(primary) {
