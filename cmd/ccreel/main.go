@@ -38,6 +38,8 @@ Commands:
 The hub is an rsync destination such as host:path, given by --hub or CCREEL_HUB.
 When CCREEL_HUB is a local directory (on the hub itself), list, find, search, show and outline also read the hub.
 Arguments after -- in pick and resume are passed to claude.
+pick and resume open a session with the config dir it lives in; --keep-config-dir opens it with
+--config-dir instead, copying the session there first.
 CCREEL_CONFIG_DIRS (colon-separated) adds config dirs that every command except push and pull also looks in.
 list and pick hide sessions with a single prompt; --all shows them.
 Run 'ccreel <command> -h' for flags.
@@ -518,6 +520,7 @@ func runPick(args []string, _, errw io.Writer) error {
 	args, extra := splitPassthrough(args)
 	fs, opts := syncFlags("pick")
 	noPull := fs.Bool("no-pull", false, "skip pulling from the hub")
+	keepDir := fs.Bool("keep-config-dir", false, "resume with --config-dir, copying the session there if it lives elsewhere")
 	var lf listFilter
 	lf.register(fs)
 	lf.registerAll(fs)
@@ -586,13 +589,13 @@ func runPick(args []string, _, errw io.Writer) error {
 			fmt.Fprintf(errw, "ccreel: opening several sessions needs tmux; resuming only the first\n")
 		} else {
 			for _, id := range ids[1:] {
-				if err := openWindow(configDir, id, extra); err != nil {
+				if err := openWindow(configDir, id, *keepDir, extra); err != nil {
 					fmt.Fprintf(errw, "ccreel: %s: %v\n", id, err)
 				}
 			}
 		}
 	}
-	return resume(configDir, ids[0], extra, errw)
+	return resume(configDir, ids[0], *keepDir, extra, errw)
 }
 
 // withConfigDir は primary 向けに組んだ同期の設定を、別の config dir 向けに直す。
@@ -612,15 +615,16 @@ func runResume(args []string, _, errw io.Writer) error {
 	args, extra := splitPassthrough(args)
 	var c common
 	fs := newFlags("resume", &c)
+	keepDir := fs.Bool("keep-config-dir", false, "resume with --config-dir, copying the session there if it lives elsewhere")
 	id, err := parseWithArg(fs, args, "session id")
 	if err != nil {
 		return err
 	}
-	return resume(c.configDir, id, extra, errw)
+	return resume(c.configDir, id, *keepDir, extra, errw)
 }
 
-func resume(configDir, id string, extra []string, errw io.Writer) error {
-	path, configDir, err := findSession(configDir, id, false)
+func resume(configDir, id string, keepDir bool, extra []string, errw io.Writer) error {
+	path, configDir, err := locateForResume(configDir, id, keepDir)
 	if err != nil {
 		return err
 	}
@@ -636,8 +640,8 @@ func resume(configDir, id string, extra []string, errw io.Writer) error {
 	return picker.Resume(claudeCommand(), m.ID, dir, extra, claudeEnv(configDir))
 }
 
-func openWindow(configDir, id string, extra []string) error {
-	path, configDir, err := findSession(configDir, id, false)
+func openWindow(configDir, id string, keepDir bool, extra []string) error {
+	path, configDir, err := locateForResume(configDir, id, keepDir)
 	if err != nil {
 		return err
 	}
@@ -653,6 +657,49 @@ func openWindow(configDir, id string, extra []string) error {
 		}
 	}
 	return picker.OpenWindow(claudeCommand(), m.ID, picker.ResumeDir(m.CWD, home), extra, setEnv)
+}
+
+// locateForResume は resume で開くセッションと config dir を決める。keepDir なら、別の config dir にある
+// セッションを primary の同じプロジェクトへ写し、primary で開く。claude --resume は CLAUDE_CONFIG_DIR の
+// 下にある jsonl しか開けないので、上限に達したアカウントの会話を別のアカウントで続けるには写すしかない
+func locateForResume(primary, id string, keepDir bool) (string, string, error) {
+	path, dir, err := findSession(primary, id, false)
+	if err != nil || !keepDir || filepath.Clean(dir) == filepath.Clean(primary) {
+		return path, dir, err
+	}
+	dst := filepath.Join(primary, "projects", filepath.Base(filepath.Dir(path)), filepath.Base(path))
+	if err := copyIfNewer(path, dst); err != nil {
+		return "", "", err
+	}
+	return dst, filepath.Clean(primary), nil
+}
+
+// copyIfNewer は dst が無いか src より古いときだけ写す。jsonl は追記しかされないので、新しい方が古い方を含む
+func copyIfNewer(src, dst string) error {
+	si, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if di, err := os.Stat(dst); err == nil && !di.ModTime().Before(si.ModTime()) {
+		return nil
+	}
+	b, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+		return err
+	}
+	// 書きかけのファイルを claude に読ませないよう、一時ファイルに書いてから置き換える
+	tmp := dst + ".ccreel-tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	if err := os.Chtimes(tmp, si.ModTime(), si.ModTime()); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, dst)
 }
 
 func claudeCommand() string {
@@ -814,9 +861,12 @@ func findSession(primary, id string, withHub bool) (string, string, error) {
 	return "", "", fmt.Errorf("%w: %q in %s", session.ErrNotFound, id, strings.Join(dirs, ", "))
 }
 
-// findIn は dirs のどれか1つにだけある ID を引く。どこにも無ければ空のパスを返す。
+// findIn は dirs から ID を引く。どこにも無ければ空のパスを返す。
+// 同じ会話が複数の config dir にあるのは --keep-config-dir で写したもので、更新の新しい方を返す。
+// 先頭の数文字が別々の会話に当たるときは、誤って開かないよう失敗させる
 func findIn(dirs []string, id string) (string, string, error) {
 	var path, dir string
+	var mod time.Time
 	for _, d := range dirs {
 		p, err := session.Find(d, id)
 		if errors.Is(err, session.ErrNotFound) {
@@ -825,10 +875,16 @@ func findIn(dirs []string, id string) (string, string, error) {
 		if err != nil {
 			return "", "", err
 		}
-		if path != "" {
-			return "", "", fmt.Errorf("%q matches sessions in both %s and %s", id, dir, d)
+		fi, err := os.Stat(p)
+		if err != nil {
+			return "", "", err
 		}
-		path, dir = p, d
+		if path != "" && filepath.Base(p) != filepath.Base(path) {
+			return "", "", fmt.Errorf("%q matches different sessions in %s and %s", id, dir, d)
+		}
+		if path == "" || fi.ModTime().After(mod) {
+			path, dir, mod = p, d, fi.ModTime()
+		}
 	}
 	return path, dir, nil
 }

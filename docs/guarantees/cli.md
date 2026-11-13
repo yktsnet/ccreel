@@ -47,6 +47,8 @@
 | `resume` は `CCREEL_CONFIG_DIRS` のどの config dir にあるセッションでも ID から引く | `TestResumeUsesTheSessionsConfigDir` |
 | `resume` はセッションに記録された cwd へ移って claude を起動する | `TestResumeUsesTheSessionsConfigDir` |
 | `resume` はセッションのある config dir を `CLAUDE_CONFIG_DIR` にして claude を起動する | `TestResumeUsesTheSessionsConfigDir` |
+| `resume --keep-config-dir` は別の config dir にあるセッションを `--config-dir` の同じプロジェクトへ写し、その config dir で claude を起動する | `TestResumeKeepConfigDirCopiesTheSession` |
+| 写したあと同じ会話が2つの config dir にあっても、`show` は失敗せずに出す | `TestResumeKeepConfigDirCopiesTheSession` |
 | `show` と `outline` は `CCREEL_CONFIG_DIRS` の別の config dir にあるセッションも ID から引く | `TestShowFindsSessionInOtherConfigDir` |
 | `list` と `search` は `CCREEL_CONFIG_DIRS` のすべての config dir を探す | `TestListAndSearchLookInEveryConfigDir` |
 | `list` と `search` はまだ `projects` の無い config dir が混ざっていても失敗しない | `TestListAndSearchLookInEveryConfigDir` |
